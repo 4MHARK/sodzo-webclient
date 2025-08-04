@@ -35,7 +35,6 @@ function App() {
             </div>
           }
         />
-        <Route path="/app" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="chat" element={<Chat />} />
           <Route path="emails" element={<Emails />} />
@@ -44,7 +43,6 @@ function App() {
           <Route path="projects" element={<Projects />} />
           <Route path="settings" element={<Settings />} />
           <Route path="admin" element={<AdminSettings />} />
-        </Route>
       </Routes>
     </Router>
   );
