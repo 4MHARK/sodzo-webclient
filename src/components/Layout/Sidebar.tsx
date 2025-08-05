@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -27,12 +26,12 @@ const navigation = [
   { name: 'Admin', href: '/admin', icon: ShieldCheck },
 ];
 
-const futureFeatures = [
-  { name: 'Notifications', href: '/notifications', icon: Bell },
-  { name: 'Analytics', href: '/analytics', icon: BarChart3 },
-  { name: 'Access Control', href: '/access', icon: Shield },
-  { name: 'Advanced Reports', href: '/reports', icon: TrendingUp },
-];
+// const futureFeatures = [
+//   { name: 'Notifications', href: '/notifications', icon: Bell },
+//   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+//   { name: 'Access Control', href: '/access', icon: Shield },
+//   { name: 'Advanced Reports', href: '/reports', icon: TrendingUp },
+// ];
 
 interface SidebarProps {
   isOpen: boolean;
@@ -77,7 +76,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div className="flex flex-col h-full">
           {/* Logo */}
           <motion.div 
-            className="flex items-center justify-center h-16 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+            className="flex items-center px-10 h-16 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
@@ -90,7 +89,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
               >
                 <BarChart3 className="w-5 h-5 text-white" />
               </motion.div>
-              <span className="text-xl font-bold text-gray-900 dark:text-white">BusinessGrow</span>
+              <span className="text-xl font-bold text-gray-900 dark:text-white">Sodzo</span>
             </div>
           </motion.div>
 
@@ -130,7 +129,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
               })}
             </div>
 
-            {/* Future Features */}
+            {/* Future Features
             <div className="pt-6 mt-6 border-t border-gray-200 dark:border-gray-700">
               <div className="px-3 mb-2">
                 <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -151,7 +150,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                   </motion.div>
                 ))}
               </div>
-            </div>
+            </div> */}
           </nav>
 
           {/* User Profile */}
