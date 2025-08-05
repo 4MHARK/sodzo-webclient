@@ -1,13 +1,29 @@
-import React from 'react';
-import { Menu, Bell, Search, User } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Menu, Bell, Search } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../UI/ThemeToggle';
+import { logout } from "../../utils/auth";
 
 interface HeaderProps {
   onMenuClick: () => void;
 }
 
 export default function Header({ onMenuClick }: HeaderProps) {
+  const navigate = useNavigate();
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setProfileOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
   return (
     <motion.header 
       className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-4 lg:px-6 transition-colors"
@@ -51,17 +67,35 @@ export default function Header({ onMenuClick }: HeaderProps) {
             <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
           </motion.button>
 
-          {/* Profile */}
-          <div className="flex items-center space-x-3">
-            <img
-              src="https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=1"
-              alt="User avatar"
-              className="w-8 h-8 rounded-full"
-            />
-            <div className="hidden md:block">
-              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Sarah Johnson</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Project Manager</p>
-            </div>
+          <div className="relative" ref={profileRef}>
+            <button
+              className="flex items-center space-x-3 focus:outline-none"
+              onClick={() => setProfileOpen((open) => !open)}
+            >
+              <img
+                src="https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=1"
+                alt="User avatar"
+                className="w-8 h-8 rounded-full"
+              />
+              <div className="hidden md:block text-left">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Sarah Johnson</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Project Manager</p>
+              </div>
+            </button>
+            {profileOpen && (
+              <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
+                <button
+                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-b-lg"
+                  onClick={() => {
+                    setProfileOpen(false);
+                    logout();
+                    navigate("/Landing");
+                  }}
+                >
+                  Logout
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

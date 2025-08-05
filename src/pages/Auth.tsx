@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ThemeToggle from "../components/UI/ThemeToggle";
 import { Link } from "react-router-dom";

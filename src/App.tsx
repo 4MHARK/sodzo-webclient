@@ -1,6 +1,6 @@
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout/Layout';
+import { Toaster } from "react-hot-toast";
 import Dashboard from './pages/Dashboard';
 import Chat from './pages/Chat';
 import Storage from './pages/Storage';
@@ -14,8 +14,11 @@ import Auth from "./pages/Auth";
 
 function App() {
   return (
+    <>
+    <Toaster position="top-right" />
     <Router>
       <Routes>
+        {/* Public routes */}
         <Route path="/" element={<Landing />} />
         <Route path="/landing" element={<Landing />} />
         <Route path="/auth" element={<Auth />} />
@@ -35,8 +38,10 @@ function App() {
             </div>
           }
         />
+
+        {/* Protected app routes under Layout */}
         <Route path="/" element={<Layout />}>
-          <Route index element={<Dashboard />} />
+          <Route path="dashboard" element={<Dashboard />} />
           <Route path="chat" element={<Chat />} />
           <Route path="emails" element={<Emails />} />
           <Route path="storage" element={<Storage />} />
@@ -47,6 +52,7 @@ function App() {
         </Route>
       </Routes>
     </Router>
+    </>
   );
 }
 
