@@ -15,7 +15,7 @@ import Auth from "./pages/Auth";
 function App() {
   return (
     <>
-    <Toaster position="top-right" />
+    {/* <Toaster position="top-right" /> */}
     <Router>
       <Routes>
         {/* Public routes */}
