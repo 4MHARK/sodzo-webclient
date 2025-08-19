@@ -1,6 +1,8 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout/Layout';
 import { Toaster } from "react-hot-toast";
+import { AuthProvider } from '../src/contexts/AuthContext';
+import { UserProvider } from './contexts/UserContext';
 import Dashboard from './pages/Dashboard';
 import Chat from './pages/Chat';
 import Storage from './pages/Storage';
@@ -15,8 +17,10 @@ import Auth from "./pages/Auth";
 function App() {
   return (
     <>
-    {/* <Toaster position="top-right" /> */}
-    <Router>
+    <Toaster position="top-center" />
+    <AuthProvider>
+      <UserProvider>
+      <Router>
       <Routes>
         {/* Public routes */}
         <Route path="/" element={<Landing />} />
@@ -52,6 +56,9 @@ function App() {
         </Route>
       </Routes>
     </Router>
+    </UserProvider>
+    </AuthProvider>
+    
     </>
   );
 }

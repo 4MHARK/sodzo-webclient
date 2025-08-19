@@ -3,7 +3,9 @@ import { Menu, Bell, Search } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../UI/ThemeToggle';
-import { logout } from "../../utils/auth";
+import { useLogout } from "../../utils/auth";
+import { mockUser } from '../../data/mockData';
+import { useUser } from '../../contexts/UserContext';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -11,6 +13,8 @@ interface HeaderProps {
 
 export default function Header({ onMenuClick }: HeaderProps) {
   const navigate = useNavigate();
+  const { user } = useUser();
+  const logout = useLogout();
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
@@ -67,29 +71,68 @@ export default function Header({ onMenuClick }: HeaderProps) {
             <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
           </motion.button>
 
+          {/* Real User */}
+          {/* <div className="relative" ref={profileRef}>
+            <button
+              className="flex items-center space-x-3 focus:outline-none"
+              onClick={() => setProfileOpen((open) => !open)}
+            >
+              <img
+                src={user?.avatar || "https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=1"}
+                alt="User avatar"
+                className="w-8 h-8 rounded-full"
+              />
+              <div className="hidden md:block text-left">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {user?.firstname} {user?.lastname}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {user?.roles?.[0] || "Project Manager"}
+                </p>
+              </div>
+            </button>
+            {profileOpen && (
+              <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
+                <button
+                  className="block w-full text-left px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-b-lg"
+                  onClick={() => {
+                    setProfileOpen(false);
+                    logout();
+                  }}
+                >
+                  Logout
+                </button>
+              </div>
+            )}
+          </div> */}
+
+          {/* Mock User */}
           <div className="relative" ref={profileRef}>
             <button
               className="flex items-center space-x-3 focus:outline-none"
               onClick={() => setProfileOpen((open) => !open)}
             >
               <img
-                src="https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=1"
-                alt="User avatar"
+                src={mockUser[0].avatar}
+                alt="Mock User avatar"
                 className="w-8 h-8 rounded-full"
               />
               <div className="hidden md:block text-left">
-                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Sarah Johnson</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Project Manager</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {mockUser[0].firstname} {mockUser[0].lastname}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {mockUser[0].roles?.[0] || "Project Manager"}
+                </p>
               </div>
             </button>
             {profileOpen && (
               <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
                 <button
-                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-b-lg"
+                  className="block w-full text-left px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-b-lg"
                   onClick={() => {
                     setProfileOpen(false);
                     logout();
-                    navigate("/Landing");
                   }}
                 >
                   Logout

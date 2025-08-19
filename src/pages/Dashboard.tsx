@@ -2,12 +2,15 @@ import { motion } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import MetricCard from '../components/UI/MetricCard';
 import ProjectCard from '../components/UI/ProjectCard';
-import { mockDashboardMetrics, mockProjects, chartData } from '../data/mockData';
+import { mockUser,mockDashboardMetrics, mockProjects, chartData } from '../data/mockData';
 import { Calendar, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { useUser } from '../contexts/UserContext';
+
 
 export default function Dashboard() {
   const activeProjects = mockProjects.filter(p => p.status === 'active');
   const recentProjects = mockProjects.slice(0, 3);
+  const { user } = useUser();
 
   return (
     <div className="w-full space-y-6">
@@ -24,7 +27,7 @@ export default function Dashboard() {
           transition={{ delay: 0.1 }}
         >
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">Welcome back, Sarah! Here's what's happening with your projects.</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">Welcome back, {user?.firstname} Here's what's happening with your projects.</p>
         </motion.div>
         <motion.div 
           className="mt-4 sm:mt-0 flex items-center space-x-3"
@@ -126,7 +129,7 @@ export default function Dashboard() {
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  label={({ name, percent }) => `${name} ${(percent* 100).toFixed(0)}%`}
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="value"

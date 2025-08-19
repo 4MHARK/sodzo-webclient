@@ -14,16 +14,19 @@ import {
   Mail,
   ShieldCheck
 } from 'lucide-react';
+import { useUser } from '../../contexts/UserContext';
+import { mockUser } from '../../data/mockData';
+
 
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: Home },
+  { name: 'Dashboard', href: '/dashboard', icon: Home },
   { name: 'Chat', href: '/chat', icon: MessageSquare },
   { name: 'Email Center', href: '/emails', icon: Mail },
   { name: 'Cloud Storage', href: '/storage', icon: Cloud },
   { name: 'Forms', href: '/forms', icon: FileText },
-  { name: 'Projects', href: '/projects', icon: FolderOpen },
+  // { name: 'Projects', href: '/projects', icon: FolderOpen },
   { name: 'Settings', href: '/settings', icon: Settings },
-  { name: 'Admin', href: '/admin', icon: ShieldCheck },
+  { name: 'Admin', href: '/admin', icon: ShieldCheck, ownerOnly: true},
 ];
 
 // const futureFeatures = [
@@ -40,6 +43,7 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
+  const { user } = useUser();
 
   const sidebarVariants = {
     open: { x: 0 },
@@ -75,28 +79,42 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <motion.div 
-            className="flex items-center px-10 h-16 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
-            <div className="flex items-center space-x-2">
-              <motion.div 
-                className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center"
-                whileHover={{ scale: 1.1, rotate: 5 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 10 }}
-              >
-                <BarChart3 className="w-5 h-5 text-white" />
-              </motion.div>
-              <span className="text-xl font-bold text-gray-900 dark:text-white">Sodzo</span>
-            </div>
-          </motion.div>
+<motion.div 
+  className="flex items-center px-10 h-16 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+  initial={{ opacity: 0, y: -20 }}
+  animate={{ opacity: 1, y: 0 }}
+  transition={{ delay: 0.1 }}
+>
+  <div className="flex items-center space-x-2">
+    {/* Logo Container */}
+      <motion.div 
+        className="rounded-lg flex items-center justify-center"
+        whileHover={{ scale: 1.1, rotate: 5 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 10 }}
+      >
+        <img 
+          src="/logo.png" 
+          alt="Sword of the Spirit Ministries Logo" 
+          className="w-auto h-12 object-cover"
+        />
+      </motion.div>
+      
+      {/* Ministry Name */}
+      <span className="text-sm md:text-sm font-bold text-gray-900 dark:text-white tracking-wide">
+        Sword of the Spirit Ministries
+      </span>
+    </div>
+    </motion.div>
+
 
           {/* Navigation */}
           <nav className="flex-1 px-4 py-6 space-y-2 bg-white dark:bg-gray-800">
             <div className="space-y-1">
               {navigation.map((item, index) => {
+                // if (item.ownerOnly && !user?.isOwner) return null;
+                if (item.ownerOnly && !mockUser[0]?.isOwner) return null;
+
+                console.log("Current user:", user);
                 const isActive = location.pathname === item.href;
                 return (
                   <motion.div
@@ -160,22 +178,38 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
           >
-            <div className="flex items-center space-x-3">
+            {/* <div className="flex items-center space-x-3">
               <img
-                src="https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=1"
-                alt="User avatar"
+                src={user?.avatar || "https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=1"}
+                alt={`${user?.firstname} ${user?.lastname}`}
                 className="w-10 h-10 rounded-full"
               />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                  Sarah Johnson
+                  {user?.firstname} {user?.lastname}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                  Project Manager
+                  {user?.roles?.[0] || 'Project Manager'}
+                </p>
+              </div>
+            </div> */}
+            <div className="flex items-center space-x-3">
+              <img
+                src={mockUser[0]?.avatar || "https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=1"}
+                alt={`${mockUser[0]?.firstname} ${mockUser[0]?.lastname}`}
+                className="w-10 h-10 rounded-full"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                  {mockUser[0]?.firstname} {mockUser[0]?.lastname}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                  {mockUser[0]?.roles?.[0] || 'Project Manager'}
                 </p>
               </div>
             </div>
           </motion.div>
+
         </div>
       </motion.div>
     </>

@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { User, Bell, Shield, Palette, Globe, Key, Download, Upload } from 'lucide-react';
+import { useUser } from '../contexts/UserContext';
+import { mockUser } from '../data/mockData';
 
 export default function Settings() {
+  const { user } = useUser();
   const [activeTab, setActiveTab] = useState('profile');
   const [notifications, setNotifications] = useState({
     email: true,
@@ -11,77 +14,161 @@ export default function Settings() {
   });
 
   const tabs = [
-    { id: 'profile', name: 'Profile', icon: User },
-    { id: 'notifications', name: 'Notifications', icon: Bell },
-    { id: 'security', name: 'Security', icon: Shield },
-    { id: 'appearance', name: 'Appearance', icon: Palette },
-    { id: 'integrations', name: 'Integrations', icon: Globe },
+    { id: 'profile', name: 'User Profile', icon: User },
+    { id : 'Node Profile', name: 'Node Profile', icon: Globe},
+    // { id: 'notifications', name: 'Notifications', icon: Bell },
+    // { id: 'security', name: 'Security', icon: Shield },
+    // { id: 'appearance', name: 'Appearance', icon: Palette },
+    // { id: 'integrations', name: 'Integrations', icon: Globe },
   ];
 
   const renderProfileTab = () => (
     <div className="space-y-6">
-      <div className="flex items-center space-x-6">
-        <div className="relative">
+      <div className="flex items-center justify-center space-x-6">
+        <div className="relative flex ">
           <img
-            src="https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&dpr=1"
+            src={user?.avatar || mockUser[0]?.avatar}
             alt="Profile"
-            className="w-24 h-24 rounded-full"
+            className="w-auto h-36 rounded-full mb-4 "
           />
-          <button className="absolute bottom-0 right-0 p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors">
+          {/* <button className="absolute bottom-0 right-0 p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors">
             <Upload className="w-4 h-4" />
-          </button>
+          </button> */}
         </div>
-        <div>
+        {/* <div>
           <h3 className="text-lg font-medium text-gray-900">Profile Photo</h3>
           <p className="text-sm text-gray-500">Update your profile photo and personal details</p>
-        </div>
+        </div> */}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Profile Form */}
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
+            <input
+              type="text"
+              defaultValue={user?.firstname || mockUser[0]?.firstname}
+              readOnly
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-100"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
+            <input
+              type="text"
+              defaultValue={user?.lastname || mockUser[0]?.lastname}
+              readOnly
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-100"
+            />
+          </div>
+        </div>
+
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
           <input
-            type="text"
-            defaultValue="Sarah"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            type="email"
+            defaultValue={user?.email || mockUser[0]?.email}
+            readOnly
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-100"
           />
         </div>
+
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
           <input
             type="text"
-            defaultValue="Johnson"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            defaultValue={user?.roles || mockUser[0]?.roles}
+            readOnly
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-100"
           />
         </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+          <input
+            type="text"
+            defaultValue={user?.phoneNumber || mockUser[0]?.phoneNumber}
+            readOnly
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-100"
+          />
+        </div>
+      </div>      
+    </div>
+  );
+
+  const renderNodeProfileTab = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-center space-x-6">
+        <div className="relative flex ">
+          <img
+            src={user?.avatar || mockUser[0]?.avatar}
+            alt="Profile"
+            className="w-auto h-36 rounded-full mb-4 "
+          />
+          {/* <button className="absolute bottom-0 right-0 p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors">
+            <Upload className="w-4 h-4" />
+          </button> */}
+        </div>
+        {/* <div>
+          <h3 className="text-lg font-medium text-gray-900">Profile Photo</h3>
+          <p className="text-sm text-gray-500">Update your profile photo and personal details</p>
+        </div> */}
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
-        <input
-          type="email"
-          defaultValue="sarah.johnson@company.com"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        />
-      </div>
+      {/* Profile Form */}
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
+            <input
+              type="text"
+              defaultValue={user?.firstname || mockUser[0]?.firstname}
+              readOnly
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-100"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
+            <input
+              type="text"
+              defaultValue={user?.lastname || mockUser[0]?.lastname}
+              readOnly
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-100"
+            />
+          </div>
+        </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Job Title</label>
-        <input
-          type="text"
-          defaultValue="Project Manager"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        />
-      </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+          <input
+            type="email"
+            defaultValue={user?.email || mockUser[0]?.email}
+            readOnly
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-100"
+          />
+        </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Bio</label>
-        <textarea
-          rows={3}
-          defaultValue="Experienced project manager with a passion for delivering exceptional results and leading high-performing teams."
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        />
-      </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
+          <input
+            type="text"
+            defaultValue={user?.roles || mockUser[0]?.roles}
+            readOnly
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-100"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+          <input
+            type="text"
+            defaultValue={user?.phoneNumber || mockUser[0]?.phoneNumber}
+            readOnly
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-100"
+          />
+        </div>
+      </div>      
     </div>
   );
 
@@ -175,8 +262,8 @@ export default function Settings() {
           </div>
         </div>
       </div>
-
-      <div>
+ 
+      {/*<div>
         <h3 className="text-lg font-medium text-gray-900 mb-4">Two-Factor Authentication</h3>
         <div className="p-4 bg-gray-50 rounded-lg">
           <div className="flex items-center justify-between">
@@ -189,7 +276,7 @@ export default function Settings() {
             </button>
           </div>
         </div>
-      </div>
+      </div> */}
 
       <div>
         <h3 className="text-lg font-medium text-gray-900 mb-4">API Keys</h3>
@@ -340,13 +427,15 @@ export default function Settings() {
         <div className="lg:col-span-3">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             {activeTab === 'profile' && renderProfileTab()}
+            {activeTab === 'Node Profile' && renderNodeProfileTab()}
             {activeTab === 'notifications' && renderNotificationsTab()}
             {activeTab === 'security' && renderSecurityTab()}
             {activeTab === 'appearance' && renderAppearanceTab()}
             {activeTab === 'integrations' && renderIntegrationsTab()}
 
+
             {/* Save Button */}
-            <div className="mt-6 pt-6 border-t border-gray-200">
+            {/* <div className="mt-6 pt-6 border-t border-gray-200">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-gray-500">
                   Changes will be saved automatically
@@ -355,7 +444,7 @@ export default function Settings() {
                   Save Changes
                 </button>
               </div>
-            </div>
+            </div> */}
           </div>
         </div>
       </div>

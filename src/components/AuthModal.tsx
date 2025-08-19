@@ -3,6 +3,9 @@ import { login } from "../utils/auth";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+import { loginMock } from "../utils/mockauth";
+
 
 interface AuthModalProps {
   open: boolean;
@@ -15,6 +18,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ open, onClose }) => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { setUser, setToken } = useAuth();
 
   useEffect(() => {
     if (open) {
@@ -24,22 +28,22 @@ const AuthModal: React.FC<AuthModalProps> = ({ open, onClose }) => {
     }
   }, [open]);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    try {
-      await login(email, password);
-      setLoading(false);
-      toast.success("Login successful!");
-      onClose();
-      navigate("/dashboard");
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Login failed");
-      toast.error(err.response?.data?.message || "Login failed");
-      setLoading(false);
-    }
-  };
+const handleLogin = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setLoading(true);
+  try {
+    // const res = await login(email, password, setUser, setToken); // ✅ pass setUser/setToken
+    const res = await loginMock(setUser, setToken);  // Use mock login for testing
+    setLoading(false);
+    toast.success("Login successful!");
+    onClose();
+    navigate("/dashboard");
+    // console.log("Logged in user:", res.user);
+  } catch (err: any) {
+    setLoading(false);
+    toast.error(err.response?.data?.message || "Login failed");
+  }
+};
 
   if (!open) return null;
   return (

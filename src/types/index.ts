@@ -1,11 +1,21 @@
 export interface User {
   id: string;
-  name: string;
+  firstname: string;
+  lastname: string;
   email: string;
-  avatar?: string;
-  role: string;
+  avatar: string;
+  roles: string[];
+  isOwner: boolean;
+  isSuper: boolean;
+  isAgreed: boolean;
+  phoneNumber?: string;
+  isPhoneVerified?: boolean;
+  isEmailVerified?: boolean;
+  tenantId?: string;
+  createdAt?: string;
+  haloId?: string;
+  status?: boolean;
 }
-
 export interface Project {
   id: string;
   name: string;
