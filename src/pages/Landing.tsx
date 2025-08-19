@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import AuthModal from "../components/AuthModal";
-import ThemeToggle from "../components/UI/ThemeToggle";
+// import ThemeToggle from "../components/UI/ThemeToggle";
 
 const avatars = [
   "https://randomuser.me/api/portraits/men/32.jpg",
@@ -17,39 +17,30 @@ export default function Landing() {
   return (
     <div className="min-h-screen w-full flex flex-col justify-center relative overflow-hidden">
       {/* Full-width Content */}
-      <div className="relative z-10 w-full min-h-screen max-w-7xl mx-auto px-4 md:px-12 py-8 md:py-12">
+      <div className="relative z-10 w-full min-h-screen mx-auto px-4 md:px-1 md:py-1">
         {/* Navbar */}
-        <nav className="flex items-center justify-between w-full mb-8 relative">
-          {/* Left side (empty spacer for balance) */}
-          <div className="flex-1"></div>
+        <nav className="relative flex items-center justify-center w-full 
+          bg-white/80 backdrop-blur-lg border-b border-gray-300 
+          shadow-md rounded-xl px-8 py-4">
+            {/* Left side (spacer for centering) */}
+          
 
-          {/* Logo centered */}
-          <div className="flex flex-col items-center space-x-3">
+          {/* Logo + caption (centered) */}
+          <div className="flex flex-col items-center">
             <img
               src="/logo.png" // <-- replace with your logo path
               alt="Sword of the Spirit Ministries Logo"
-              className="h-20 w-auto"
+              className="h-28 w-auto mb-1"
             />
-            <p className="text-base font-semibold text-gray-800">
+            <p className="text-sm font-semibold text-gray-700 tracking-wide">
               Sword of the Spirit Ministries
             </p>
           </div>
-          
 
           {/* Right side */}
-          <div className="flex items-center space-x-4 flex-1 justify-end">
-            {/* <ThemeToggle /> */}
-            {/* <button
-              onClick={() => {
-                setAuthTab("signup");
-                setAuthOpen(true);
-              }}
-              className="px-5 py-2 bg-purple-800 text-white rounded-xl font-semibold shadow hover:bg-purple-900 transition"
-            >
-              Login
-            </button> */}
-          </div>
+          
         </nav>
+
 
         {/* Hero Section */}
         <section className="h-full flex flex-col items-center justify-center text-center py-8">
