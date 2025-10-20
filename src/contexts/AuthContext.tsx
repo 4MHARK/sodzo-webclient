@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode, useCallback, useRef } from "react";
+import { createContext, useContext, useState, ReactNode, useCallback, useRef, useEffect } from "react";
 import axios from 'axios';
 import { createAPI } from "../utils/api";
 import type { AxiosInstance } from 'axios';
@@ -24,88 +24,121 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const REFRESH_KEY = 'saby:refresh_token';
-
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setTokenState] = useState<string | null>(null); // access token stays in memory only
+  // Keep a ref for the access token so createAPI's request interceptor can read a stable reference
+  const tokenRef = useRef<string | null>(null);
+  // In cookie-only mode we do not persist refresh tokens in localStorage.
+  // Access tokens are not exposed to JS if backend marks them HttpOnly as well.
+  // We keep an in-memory `user` and optionally the access token if server returns it in responses,
+  // but we never persist tokens in localStorage or read cookies from JS.
 
-  // setTokens will be called by the API refresh flow to update access and refresh tokens
-  const setTokens = useCallback((tokens: { access?: string | null; refresh?: string | null }) => {
-    if (tokens.access !== undefined) {
-      setTokenState(tokens.access ?? null);
-    }
-    if (tokens.refresh !== undefined) {
-      if (tokens.refresh) localStorage.setItem(REFRESH_KEY, tokens.refresh);
-      else localStorage.removeItem(REFRESH_KEY);
-    }
+  const setTokenStateSafe = useCallback((t: string | null) => {
+    tokenRef.current = t;
+    setTokenState(t);
   }, []);
 
-  const getAccessToken = useCallback(() => token, [token]);
-
-  // create stable api instance and keep as ref
+  // create stable api instance and keep as ref. Provide get/set access token callbacks and
+  // an onAuthFailure callback that the API layer will call if a refresh attempt fails.
   const apiRef = useRef<AxiosInstance | null>(null);
-  if (!apiRef.current) apiRef.current = createAPI(getAccessToken, setTokens);
+  // Stable getter that reads the ref value (not a render-bound closure)
+  const getAccessToken = useCallback(() => tokenRef.current, []);
+  const setAccessToken = useCallback((t: string | null) => setTokenStateSafe(t), [setTokenStateSafe]);
+  // Keep refresh token in memory only (do not persist to localStorage).
+  const refreshTokenRef = useRef<string | null>(null);
+  const getRefreshToken = useCallback(() => refreshTokenRef.current, []);
+  if (!apiRef.current) apiRef.current = createAPI(getAccessToken, setAccessToken, getRefreshToken, () => {
+    // onAuthFailure: clear in-memory user/token so UI updates to logged-out state
+    setUser(null);
+    setTokenStateSafe(null);
+  });
+
+  // On mount, attempt a silent refresh to let the backend re-establish a session from cookies.
+  // Run this only once using useEffect and a guard ref to avoid spamming the refresh endpoint.
+  const restoreRunRef = useRef(false);
+  useEffect(() => {
+    if (restoreRunRef.current) return;
+    restoreRunRef.current = true;
+
+    if (!user) {
+      // Use the api's guarded refresh helper so startup doesn't bypass backoff/cooldown
+      try {
+        const doRefresh = (apiRef.current as any)?._doRefresh as (() => Promise<any>) | undefined;
+        if (doRefresh) {
+          doRefresh().then((resp) => {
+            const data = resp?.data as any;
+            const userResp = data?.user ?? null;
+            const accessToken = data?.access?.token ?? data?.tokens?.access?.token ?? data?.access_token ?? data?.token ?? null;
+            const newRefresh = data?.refresh?.token ?? data?.tokens?.refresh?.token ?? data?.refresh_token ?? data?.refreshToken ?? null;
+            if (userResp) setUser(userResp);
+            if (accessToken) setTokenStateSafe(accessToken);
+            if (newRefresh) refreshTokenRef.current = newRefresh;
+          }).catch(() => {
+            // ignore; user remains unauthenticated
+          });
+        } else {
+          // Fallback: call refresh endpoint directly
+          apiRef.current?.post('/auth/refresh-tokens', {}, { withCredentials: true }).then((resp) => {
+            const data = resp.data as any;
+            const userResp = data?.user ?? null;
+            const accessToken = data?.access?.token ?? data?.tokens?.access?.token ?? data?.access_token ?? data?.token ?? null;
+            const newRefresh = data?.refresh?.token ?? data?.tokens?.refresh?.token ?? data?.refresh_token ?? data?.refreshToken ?? null;
+            if (userResp) setUser(userResp);
+            if (accessToken) setTokenStateSafe(accessToken);
+            if (newRefresh) refreshTokenRef.current = newRefresh;
+          }).catch(() => {
+            // ignore
+          });
+        }
+      } catch (e) {
+        // swallow
+      }
+    }
+  }, [user]);
 
   const logout = useCallback(() => {
-    // Attempt to notify backend (fire-and-forget). Some APIs require server-side logout to revoke refresh tokens.
-    // include refresh token in logout request body in case the server requires it
+    // Notify backend so it can clear its cookies.
     try {
-      const refresh = localStorage.getItem(REFRESH_KEY);
-      apiRef.current?.post('/auth/logout', { refresh_token: refresh }).catch(() => {});
+      const body = refreshTokenRef.current ? { refreshToken: refreshTokenRef.current } : {};
+      apiRef.current?.post('/auth/logout', body, { withCredentials: true }).catch(() => {});
     } catch {
-      // ignore
+      apiRef.current?.post('/auth/logout', {}, { withCredentials: true }).catch(() => {});
     }
 
-    // Clear persisted tokens/user used by other contexts and storage
-    localStorage.removeItem(REFRESH_KEY);
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
-
-    // Clear in-memory state
+    // Clear only in-memory state. Do not attempt to read/clear tokens from localStorage; cookies are cleared by the server.
     setUser(null);
-    setTokenState(null);
-  }, []);
+    setTokenStateSafe(null);
+  }, [setTokenStateSafe]);
 
   // Provide setToken for compatibility with existing components (like AuthModal)
   const setToken = useCallback((t: string | null) => {
-    setTokens({ access: t });
-  }, [setTokens]);
+    setTokenStateSafe(t);
+  }, [setTokenStateSafe]);
 
-  const login = useCallback(
-    async (email: string, password: string) => {
-      try {
-        const resp = await apiRef.current!.post('/auth/login', { email, password });
-        // Support multiple response shapes
-        const data = resp.data;
-        const userResp: User | undefined = data.user ?? data;
+  const login = useCallback(async (email: string, password: string) => {
+    try {
+      // In cookie-only mode the backend should set HttpOnly cookies on successful login.
+      const resp = await apiRef.current!.post('/auth/login', { email, password }, { withCredentials: true });
+      const data = resp.data as any;
+      const userResp: User | undefined = data.user ?? data ?? null;
 
-        // access token may be in multiple shapes: data.tokens.access.token, data.access.token or data.access_token
-        const accessToken: string | null =
-          data.tokens?.access?.token ?? data.access?.token ?? data.access_token ?? null;
+      // Backend may return a non-HttpOnly access token in the body (optional). Keep it in memory if provided.
+  const accessToken = data?.access?.token ?? data?.tokens?.access?.token ?? data?.access_token ?? data?.token ?? null;
+  const newRefresh = data?.refresh?.token ?? data?.tokens?.refresh?.token ?? data?.refresh_token ?? data?.refreshToken ?? null;
+  if (accessToken) setTokenStateSafe(accessToken);
+  if (newRefresh) refreshTokenRef.current = newRefresh;
 
-        // refresh token may be in data.tokens.refresh.token or data.refresh.token or data.refresh_token
-        const refreshToken: string | null =
-          data.tokens?.refresh?.token ?? data.refresh?.token ?? data.refresh_token ?? null;
-
-        // set tokens via setTokens which will persist the refresh token and set in-memory access token
-        setTokens({ access: accessToken, refresh: refreshToken });
-
-        // set state
-        setUser(userResp ?? null);
-
-        return userResp ?? ({} as User);
-      } catch (err: unknown) {
-        // Normalize error message for callers
-        let message = 'Login failed';
-        if (axios.isAxiosError(err)) {
-          message = err.response?.data?.message ?? err.message ?? message;
-        } else if (err instanceof Error) message = err.message;
-        throw new Error(message);
-      }
-    },
-    [setToken]
-  );
+      setUser(userResp ?? null);
+      return userResp ?? ({} as User);
+    } catch (err: unknown) {
+      let message = 'Login failed';
+      if (axios.isAxiosError(err)) {
+        message = err.response?.data?.message ?? err.message ?? message;
+      } else if (err instanceof Error) message = err.message;
+      throw new Error(message);
+    }
+  }, [setTokenStateSafe]);
 
   return (
     <AuthContext.Provider value={{ user, token, setUser, setToken, login, logout, api: apiRef.current! }}>

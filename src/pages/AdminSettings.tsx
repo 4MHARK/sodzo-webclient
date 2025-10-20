@@ -51,8 +51,8 @@ export default function AdminSettings() {
   const [apiConfigs, setApiConfigs] = useState<ApiConfig[]>([
     {
       id: '1',
-      name: 'OpenAI API',
-      endpoint: 'https://api.openai.com/v1',
+      name: 'Saby AI',
+      endpoint: 'https://api-staging.saby.ai/v1',
       apiKey: 'sk-proj-1234567890abcdef',
       enabled: true,
       lastTested: new Date(),

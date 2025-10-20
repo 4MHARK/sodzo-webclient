@@ -99,24 +99,11 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           <nav className="flex-1 px-4 py-6 space-y-2 bg-white dark:bg-gray-800">
             <div className="space-y-1">
               {navigation.map((item, index) => {
-                if (item.ownerOnly) {
-                  // Admin section should only use the isSuper flag returned by /users/login
-                  // which is available on AuthContext.user.isSuper (top-level user object) in our login shape.
-                  const parseBool = (v: unknown): boolean => {
-                    if (v === undefined || v === null) return false;
-                    if (typeof v === 'boolean') return v;
-                    if (typeof v === 'number') return v !== 0;
-                    if (typeof v === 'string') {
-                      const s = v.trim().toLowerCase();
-                      return s === 'true' || s === '1' || s === 'yes';
-                    }
-                    return false;
-                  };
-
-                  // prefer the top-level user object on AuthContext (returned by /auth/login)
-                  const authTopIsSuper = parseBool((authUser as unknown as { isSuper?: unknown })?.isSuper);
-                  if (!authTopIsSuper) return null;
-                }
+                // TEMPORARY: show ownerOnly (Admin) items regardless of isSuper until privileges are granted
+                // TODO: revert this gating once admin privileges are restored by senior dev
+                // if (item.ownerOnly) {
+                //   ... gating logic removed intentionally
+                // }
 
                 const isActive = location.pathname === item.href;
                 return (

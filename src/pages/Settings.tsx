@@ -103,8 +103,26 @@ export default function Settings() {
 
   // Debug: log access token presence before sending request
   console.debug('[Settings] accessToken present:', Boolean(accessToken));
-  // Use Axios instance from AuthContext which will attach the access token and handle refresh
-  const resp = await api.patch(`/users/${user.id}`, payload);
+    // Ensure we attempt a refresh (guards/backoff applied) before PATCH so server will accept Authorization if returned
+    try {
+      const doRefresh = (api as any)?._doRefresh as (() => Promise<any>) | undefined;
+      if (doRefresh) {
+        await doRefresh();
+      } else {
+        // fallback: call refresh endpoint directly
+        await api.post('/auth/refresh-tokens', {}, { withCredentials: true });
+      }
+    } catch (refreshErr) {
+      console.warn('[Settings] refresh before save failed', refreshErr);
+      // If refresh fails, log user out to surface re-auth requirement
+      logout();
+      toast.error('Session expired — please sign in again');
+      setLoadingSave(false);
+      return;
+    }
+
+    // Use Axios instance from AuthContext which will attach the access token and handle refresh
+    const resp = await api.patch(`/users/${user.id}`, payload);
         const updated = resp.data as Partial<UserModel>;
         const merged = { ...(userContextUser ?? {}), ...updated } as UserModel;
         // update both contexts where available
