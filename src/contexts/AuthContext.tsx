@@ -48,7 +48,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   if (!apiRef.current) apiRef.current = createAPI(getAccessToken, setTokens);
 
   const logout = useCallback(() => {
+    // Attempt to notify backend (fire-and-forget). Some APIs require server-side logout to revoke refresh tokens.
+    // include refresh token in logout request body in case the server requires it
+    try {
+      const refresh = localStorage.getItem(REFRESH_KEY);
+      apiRef.current?.post('/auth/logout', { refresh_token: refresh }).catch(() => {});
+    } catch {
+      // ignore
+    }
+
+    // Clear persisted tokens/user used by other contexts and storage
     localStorage.removeItem(REFRESH_KEY);
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+
+    // Clear in-memory state
     setUser(null);
     setTokenState(null);
   }, []);
@@ -66,19 +80,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const data = resp.data;
         const userResp: User | undefined = data.user ?? data;
 
-        // access token may be in data.access.token or data.access_token
+        // access token may be in multiple shapes: data.tokens.access.token, data.access.token or data.access_token
         const accessToken: string | null =
-          data.access?.token ?? data.access_token ?? null;
+          data.tokens?.access?.token ?? data.access?.token ?? data.access_token ?? null;
 
-        // refresh token may be in data.refresh.token or data.refresh_token
-        const refreshToken: string | null = data.refresh?.token ?? data.refresh_token ?? null;
+        // refresh token may be in data.tokens.refresh.token or data.refresh.token or data.refresh_token
+        const refreshToken: string | null =
+          data.tokens?.refresh?.token ?? data.refresh?.token ?? data.refresh_token ?? null;
 
-        // persist refresh token
-        if (refreshToken) localStorage.setItem(REFRESH_KEY, refreshToken);
+        // set tokens via setTokens which will persist the refresh token and set in-memory access token
+        setTokens({ access: accessToken, refresh: refreshToken });
 
         // set state
         setUser(userResp ?? null);
-        if (accessToken) setToken(accessToken);
 
         return userResp ?? ({} as User);
       } catch (err: unknown) {

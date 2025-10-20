@@ -7,10 +7,7 @@ import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'ax
 export const API_BASE = (import.meta.env.VITE_API_BASE as string) ?? (import.meta.env.DEV ? '/v1' : 'https://api-staging.saby.ai/v1');
 const REFRESH_KEY = 'saby:refresh_token';
 
-type RefreshResponse = {
-  access: { token: string; expiresIn?: number };
-  refresh?: { token: string } | null;
-};
+// RefreshResponse type was removed because we accept multiple response shapes from the API
 
 export function createAPI(
   getAccessToken: () => string | null,
@@ -75,12 +72,18 @@ export function createAPI(
           const refreshToken = localStorage.getItem(REFRESH_KEY);
           if (!refreshToken) throw new Error('No refresh token available');
 
-          const resp = await axios.post<RefreshResponse>(`${API_BASE}/auth/refresh`, {
-            refresh_token: refreshToken,
-          });
+          // The backend expects the current access token in the Authorization header
+          // and the refresh token in the body as { refreshToken } at /auth/refresh-tokens
+          const currentAccess = getAccessToken();
+          const resp = await axios.post(`${API_BASE}/auth/refresh-tokens`,
+            { refreshToken: refreshToken },
+            { headers: currentAccess ? { Authorization: `Bearer ${currentAccess}` } : undefined }
+          );
 
-          const newAccess = resp.data.access.token;
-          const newRefresh = resp.data.refresh?.token ?? null;
+          // Accept multiple response shapes: resp.data.access.token, resp.data.tokens.access.token, resp.data.access_token, resp.data.token
+          const respData = resp.data as any;
+          const newAccess = respData?.access?.token ?? respData?.tokens?.access?.token ?? respData?.access_token ?? respData?.token ?? null;
+          const newRefresh = respData?.refresh?.token ?? respData?.tokens?.refresh?.token ?? respData?.refresh_token ?? respData?.refreshToken ?? null;
 
           setTokens({ access: newAccess, refresh: newRefresh });
 

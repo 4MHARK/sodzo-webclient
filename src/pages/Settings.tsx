@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 
 export default function Settings() {
     const { user: userContextUser, setUser: setUserContext } = useUser();
-  const { api, logout, user: authUser, setUser: setAuthUser } = useAuth();
+  const { api, logout, user: authUser, setUser: setAuthUser, token: accessToken } = useAuth();
   // prefer the authenticated user when available
   const user: Partial<UserModel> | null = (authUser as unknown as Partial<UserModel>) ?? userContextUser ?? null;
   const [activeTab, setActiveTab] = useState('profile');
@@ -101,8 +101,10 @@ export default function Settings() {
           phoneNumber: phone,
         };
 
-        // Use Axios instance from AuthContext which will attach the access token and handle refresh
-        const resp = await api.patch(`/users/${user.id}`, payload);
+  // Debug: log access token presence before sending request
+  console.debug('[Settings] accessToken present:', Boolean(accessToken));
+  // Use Axios instance from AuthContext which will attach the access token and handle refresh
+  const resp = await api.patch(`/users/${user.id}`, payload);
         const updated = resp.data as Partial<UserModel>;
         const merged = { ...(userContextUser ?? {}), ...updated } as UserModel;
         // update both contexts where available

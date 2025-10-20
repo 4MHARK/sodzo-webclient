@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Menu, Bell, Search } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { /* useNavigate */ } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../UI/ThemeToggle';
 import { useUser } from '../../contexts/UserContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -12,8 +12,9 @@ interface HeaderProps {
 
 export default function Header({ onMenuClick }: HeaderProps) {
   // navigate not used here; keep import placeholder in case navigation is added later
-  const { user } = useUser();
+  const { user, logout: userLogout } = useUser();
   const { user: authUser, logout } = useAuth();
+  const navigate = useNavigate();
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
@@ -96,7 +97,10 @@ export default function Header({ onMenuClick }: HeaderProps) {
                   className="block w-full text-left px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-b-lg"
                   onClick={() => {
                     setProfileOpen(false);
+                    // clear both auth and user contexts and redirect to auth page
                     logout();
+                    userLogout();
+                    navigate('/');
                   }}
                 >
                   Logout
