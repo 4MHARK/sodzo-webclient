@@ -1,20 +1,19 @@
 import { useState, useRef, useEffect } from 'react';
 import { Menu, Bell, Search } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { /* useNavigate */ } from 'react-router-dom';
 import ThemeToggle from '../UI/ThemeToggle';
-import { useLogout } from "../../utils/auth";
-import { mockUser } from '../../data/mockData';
 import { useUser } from '../../contexts/UserContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface HeaderProps {
   onMenuClick: () => void;
 }
 
 export default function Header({ onMenuClick }: HeaderProps) {
-  const navigate = useNavigate();
+  // navigate not used here; keep import placeholder in case navigation is added later
   const { user } = useUser();
-  const logout = useLogout();
+  const { user: authUser, logout } = useAuth();
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
@@ -106,23 +105,25 @@ export default function Header({ onMenuClick }: HeaderProps) {
             )}
           </div> */}
 
-          {/* Mock User */}
+          {/* Real User (prefer UserContext, fallback to AuthContext) */}
           <div className="relative" ref={profileRef}>
             <button
               className="flex items-center space-x-3 focus:outline-none"
               onClick={() => setProfileOpen((open) => !open)}
             >
               <img
-                src={mockUser[0].avatar}
-                alt="Mock User avatar"
+                src={user?.avatar || authUser?.avatarUrl || 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=1'}
+                alt={
+                  user ? `${user.firstname} ${user.lastname}` : authUser ? authUser.name ?? 'User' : 'User avatar'
+                }
                 className="w-8 h-8 rounded-full"
               />
               <div className="hidden md:block text-left">
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {mockUser[0].firstname} {mockUser[0].lastname}
+                  {user ? `${user.firstname} ${user.lastname}` : authUser ? authUser.name ?? 'User' : 'User'}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {mockUser[0].roles?.[0] || "Project Manager"}
+                  {user?.roles?.[0] || (Array.isArray(authUser?.metadata?.roles) ? String(authUser?.metadata?.roles[0]) : 'Project Manager')}
                 </p>
               </div>
             </button>

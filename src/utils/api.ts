@@ -27,6 +27,10 @@ export function createAPI(
 
   api.interceptors.request.use((config: CustomRequestConfig) => {
     const token = getAccessToken();
+    // Debug: log presence of token (don't log the whole token)
+    if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+      console.debug(`[api] request ${config.method} ${config.url} - accessToken ${token ? 'present' : 'none'}`);
+    }
     if (token && config.headers) {
       // headers may be AxiosHeaders; assign Authorization in a compatible way
       (config.headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
