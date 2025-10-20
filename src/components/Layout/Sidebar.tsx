@@ -100,8 +100,22 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             <div className="space-y-1">
               {navigation.map((item, index) => {
                 if (item.ownerOnly) {
-                  // prefer real user ownership flag, fall back to mock
-                  if (!user?.isOwner && !authUser?.metadata?.isOwner && !mockUser[0]?.isOwner) return null;
+                  // Admin section should only use the isSuper flag returned by /users/login
+                  // which is available on AuthContext.user.isSuper (top-level user object) in our login shape.
+                  const parseBool = (v: unknown): boolean => {
+                    if (v === undefined || v === null) return false;
+                    if (typeof v === 'boolean') return v;
+                    if (typeof v === 'number') return v !== 0;
+                    if (typeof v === 'string') {
+                      const s = v.trim().toLowerCase();
+                      return s === 'true' || s === '1' || s === 'yes';
+                    }
+                    return false;
+                  };
+
+                  // prefer the top-level user object on AuthContext (returned by /auth/login)
+                  const authTopIsSuper = parseBool((authUser as unknown as { isSuper?: unknown })?.isSuper);
+                  if (!authTopIsSuper) return null;
                 }
 
                 const isActive = location.pathname === item.href;
