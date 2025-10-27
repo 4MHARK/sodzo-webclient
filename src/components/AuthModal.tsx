@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { login } from "../utils/auth";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { loginMock } from "../utils/mockauth";
+// We'll use login from AuthContext via useAuth()
 
 interface AuthModalProps {
   open: boolean;
@@ -16,18 +15,15 @@ const AuthModal: React.FC<AuthModalProps> = ({ open, onClose }) => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [isVisible, setIsVisible] = useState(false);
+  // visibility handled by `open` prop; no separate internal visibility state needed
   const navigate = useNavigate();
-  const { setUser, setToken } = useAuth();
+  const { login } = useAuth();
 
   useEffect(() => {
     if (open) {
       setEmail("");
       setPassword("");
       setError("");
-      setIsVisible(true);
-    } else {
-      setIsVisible(false);
     }
   }, [open]);
 
@@ -35,16 +31,15 @@ const AuthModal: React.FC<AuthModalProps> = ({ open, onClose }) => {
     e.preventDefault();
     setLoading(true);
     try {
-      // const res = await login(email, password, setUser, setToken); // ✅ pass setUser/setToken
-      const res = await loginMock(setUser, setToken); // Use mock login for testing
+      await login(email, password);
       setLoading(false);
       toast.success("Login successful!");
       onClose();
       navigate("/dashboard");
-      // console.log("Logged in user:", res.user);
-    } catch (err: any) {
+    } catch (err) {
       setLoading(false);
-      toast.error(err.response?.data?.message || "Login failed");
+      const message = err instanceof Error ? err.message : 'Login failed';
+      toast.error(message);
     }
   };
 
@@ -238,7 +233,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ open, onClose }) => {
                     Signing in...
                   </div>
                 ) : (
-                  "Sign In"
+                  'Sign In'
                 )}
               </span>
             </motion.button>

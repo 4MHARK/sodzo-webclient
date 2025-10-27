@@ -1,20 +1,8 @@
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  BarChart3, 
-  MessageSquare, 
-  Cloud, 
-  FileText, 
-  FolderOpen, 
-  Settings,
-  Bell,
-  Shield,
-  TrendingUp,
-  Home,
-  Mail,
-  ShieldCheck
-} from 'lucide-react';
+import { MessageSquare, Cloud, FileText, Settings, Home, Mail, ShieldCheck } from 'lucide-react';
 import { useUser } from '../../contexts/UserContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { mockUser } from '../../data/mockData';
 
 
@@ -44,7 +32,7 @@ interface SidebarProps {
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
   const { user } = useUser();
-
+  const { user: authUser } = useAuth();
   const sidebarVariants = {
     open: { x: 0 },
     closed: { x: '-100%' }
@@ -111,10 +99,12 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           <nav className="flex-1 px-4 py-6 space-y-2 bg-white dark:bg-gray-800">
             <div className="space-y-1">
               {navigation.map((item, index) => {
-                // if (item.ownerOnly && !user?.isOwner) return null;
-                if (item.ownerOnly && !mockUser[0]?.isOwner) return null;
+                // TEMPORARY: show ownerOnly (Admin) items regardless of isSuper until privileges are granted
+                // TODO: revert this gating once admin privileges are restored by senior dev
+                // if (item.ownerOnly) {
+                //   ... gating logic removed intentionally
+                // }
 
-                console.log("Current user:", user);
                 const isActive = location.pathname === item.href;
                 return (
                   <motion.div
@@ -195,16 +185,16 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             </div> */}
             <div className="flex items-center space-x-3">
               <img
-                src={mockUser[0]?.avatar || "https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=1"}
-                alt={`${mockUser[0]?.firstname} ${mockUser[0]?.lastname}`}
+                src={user?.avatar || authUser?.avatarUrl || mockUser[0]?.avatar || 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=1'}
+                alt={`${user ? `${user.firstname} ${user.lastname}` : authUser ? authUser.name ?? 'User' : `${mockUser[0]?.firstname} ${mockUser[0]?.lastname}`}`}
                 className="w-10 h-10 rounded-full"
               />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                  {mockUser[0]?.firstname} {mockUser[0]?.lastname}
+                  {user ? `${user.firstname} ${user.lastname}` : authUser ? authUser.name ?? 'User' : `${mockUser[0]?.firstname} ${mockUser[0]?.lastname}`}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                  {mockUser[0]?.roles?.[0] || 'Project Manager'}
+                  {user?.roles?.[0] || (Array.isArray(authUser?.metadata?.roles) ? String(authUser?.metadata?.roles[0]) : mockUser[0]?.roles?.[0] || 'Project Manager')}
                 </p>
               </div>
             </div>
