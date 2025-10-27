@@ -12,6 +12,7 @@ import {
   User,
   Globe,
   LogOut,
+  Activity,
 } from "lucide-react";
 import { useUser } from "../../contexts/UserContext";
 import { useAuth } from "../../contexts/AuthContext";
@@ -27,6 +28,7 @@ const navigation = [
   { name: "Forms", href: "/forms", icon: FileText },
   { name: "Settings", href: "/settings", icon: Settings },
   { name: "Admin", href: "/admin", icon: ShieldCheck, ownerOnly: true },
+  { name: "Data Test", href: "/data-test", icon: Activity, ownerOnly: true },
 ];
 
 // const futureFeatures = [

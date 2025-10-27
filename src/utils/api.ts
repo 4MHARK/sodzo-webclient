@@ -14,15 +14,34 @@ export const API_BASE =
 
 // API Endpoints from environment variables
 export const API_ENDPOINTS = {
+  // Auth endpoints
   AUTH: import.meta.env.VITE_API_AUTH_ENDPOINT || "/auth/login",
   REFRESH: import.meta.env.VITE_API_REFRESH_ENDPOINT || "/auth/refresh-tokens",
   LOGOUT: import.meta.env.VITE_API_LOGOUT_ENDPOINT || "/auth/logout",
-  USER: import.meta.env.VITE_API_USER_ENDPOINT || "/user",
+
+  // User endpoints
+  USER: import.meta.env.VITE_API_USER_ENDPOINT || "/users",
+  USER_PROFILE:
+    import.meta.env.VITE_API_USER_PROFILE_ENDPOINT || "/user-profiles",
+
+  // Node endpoints
   NODE: import.meta.env.VITE_API_NODE_ENDPOINT || "/node",
-  FORMS: import.meta.env.VITE_API_FORMS_ENDPOINT || "/project-forms",
+  NODE_PROFILE:
+    import.meta.env.VITE_API_NODE_PROFILE_ENDPOINT || "/nodeprofile",
+
+  // Project Form endpoints
+  PROJECT_FORM:
+    import.meta.env.VITE_API_PROJECT_FORM_ENDPOINT || "/projectForm",
+
+  // Storage endpoints
+  STORAGE: import.meta.env.VITE_API_STORAGE_ENDPOINT || "/storage",
+
+  // Inmail endpoints
+  INMAIL: import.meta.env.VITE_API_INMAIL_ENDPOINT || "/inmail",
 };
 
-const LOCAL_REFRESH_KEY = import.meta.env.VITE_REFRESH_TOKEN_KEY || "saby:refresh_token";
+const LOCAL_REFRESH_KEY =
+  import.meta.env.VITE_REFRESH_TOKEN_KEY || "saby:refresh_token";
 
 // RefreshResponse type was removed because we accept multiple response shapes from the API
 
@@ -30,7 +49,7 @@ export function createAPI(
   getAccessToken?: () => string | null,
   setAccessToken?: (t: string | null) => void,
   getRefreshToken?: () => string | null,
-  onAuthFailure?: () => void,
+  onAuthFailure?: () => void
 ): AxiosInstance {
   const api = axios.create({
     baseURL: API_BASE,
@@ -44,8 +63,9 @@ export function createAPI(
     try {
       const token = getAccessToken ? getAccessToken() : null;
       if (token && config.headers) {
-        (config.headers as Record<string, string>)["Authorization"] =
-          `Bearer ${token}`;
+        (config.headers as Record<string, string>)[
+          "Authorization"
+        ] = `Bearer ${token}`;
       }
     } catch (e) {
       // ignore
@@ -92,8 +112,8 @@ export function createAPI(
       const body = refreshToken
         ? { refreshToken }
         : legacy
-          ? { refreshToken: legacy }
-          : {};
+        ? { refreshToken: legacy }
+        : {};
       const resp = await axios.post(
         `${API_BASE}${API_ENDPOINTS.REFRESH}`,
         body,
@@ -182,7 +202,7 @@ export function createAPI(
       }
 
       return Promise.reject(err);
-    },
+    }
   );
 
   // Expose guarded refresh helper for callers (e.g., AuthContext startup restore) to avoid bypassing cooldown/backoff
@@ -215,7 +235,7 @@ if (import.meta.env.DEV) {
       if (!resp.ok) {
         if (resp.status === 401) {
           console.warn(
-            "[debug] cookie-refresh failed: 401 Unauthorized — cookie missing or invalid",
+            "[debug] cookie-refresh failed: 401 Unauthorized — cookie missing or invalid"
           );
         } else if (resp.status === 404) {
           console.warn("[debug] cookie-refresh endpoint not found (404)");
@@ -223,7 +243,7 @@ if (import.meta.env.DEV) {
           console.warn(
             "[debug] cookie-refresh returned",
             resp.status,
-            await resp.text(),
+            await resp.text()
           );
         }
         return { ok: false, status: resp.status };
@@ -239,11 +259,11 @@ if (import.meta.env.DEV) {
       );
       if (hasAccess) {
         console.log(
-          "[debug] cookie-refresh succeeded — cookies are working and server returned new tokens",
+          "[debug] cookie-refresh succeeded — cookies are working and server returned new tokens"
         );
       } else {
         console.log(
-          "[debug] cookie-refresh succeeded (200) — server did not return token in body; server may be using cookies to rotate refresh token",
+          "[debug] cookie-refresh succeeded (200) — server did not return token in body; server may be using cookies to rotate refresh token"
         );
       }
       return { ok: true, status: resp.status, data };

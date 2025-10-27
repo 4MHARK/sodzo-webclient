@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { useUser } from "../contexts/UserContext";
+import { useIntelligentUserProfile } from "../contexts/IntelligentContexts";
 import type { User as UserModel } from "../contexts/UserContext";
 import { useAuth } from "../contexts/AuthContext";
 import { mockUser } from "../data/mockData";
@@ -26,6 +27,12 @@ import { useSearchParams } from "react-router-dom";
 
 export default function Settings() {
   const { user: userContextUser, setUser: setUserContext } = useUser();
+  const {
+    userProfile,
+    loading: profileLoading,
+    error: profileError,
+    updateUserProfile,
+  } = useIntelligentUserProfile();
   const {
     api,
     logout,

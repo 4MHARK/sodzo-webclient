@@ -20,14 +20,13 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
-import { useAuth } from "../contexts/AuthContext";
+import { useIntelligentNode } from "../contexts/IntelligentContexts";
+import { useData } from "../hooks/useData";
 import toast from "react-hot-toast";
 
 export default function NodeProfileClean() {
-  const { api, logout } = useAuth();
-  const [nodes, setNodes] = useState<any[]>([]);
-  const [selectedNode, setSelectedNode] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { nodes, selectedNode, loading, error, updateNode } =
+    useIntelligentNode();
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -83,30 +82,11 @@ export default function NodeProfileClean() {
     tenantId: "",
   });
 
-  // Fetch nodes on mount
+  // Update form data when selected node changes
   useEffect(() => {
-    const fetchNodes = async () => {
-      try {
-        const res = await api.get("/node");
-        const data = res.data.results;
-        setNodes(data);
-        if (data.length > 0) {
-          setSelectedNode(data[0]);
-          setFormData(mapNodeToForm(data[0]));
-        }
-      } catch (err: any) {
-        if (err.response?.status === 401) logout();
-        toast.error("Failed to load church information");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchNodes();
-  }, [api, logout]);
-
-  // When node changes, update form data
-  useEffect(() => {
-    if (selectedNode) setFormData(mapNodeToForm(selectedNode));
+    if (selectedNode) {
+      setFormData(mapNodeToForm(selectedNode));
+    }
   }, [selectedNode]);
 
   const mapNodeToForm = (node: any) => ({
@@ -145,12 +125,6 @@ export default function NodeProfileClean() {
     tenantId: node.tenantId || "",
   });
 
-  const handleSelect = (nodeId: string) => {
-    const node = nodes.find((n) => n.id === nodeId);
-    setSelectedNode(node);
-    setIsEditing(false);
-  };
-
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
@@ -164,12 +138,11 @@ export default function NodeProfileClean() {
   };
 
   const handleSave = async () => {
+    if (!selectedNode) return;
+
     setSaving(true);
     try {
-      // Future PATCH integration (ready for backend)
-      // await api.patch(`/users/${selectedUserId}/nodes/${selectedNode.id}`, formData);
-
-      console.log("Data ready for PATCH:", formData);
+      await updateNode(selectedNode.id, formData);
       toast.success("Church profile updated successfully!");
       setIsEditing(false);
     } catch (err) {
@@ -185,6 +158,18 @@ export default function NodeProfileClean() {
       <div className="flex justify-center items-center h-64 text-gray-500">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         <span className="ml-3">Loading church information...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center text-red-500 mt-10">
+        <AlertCircle className="w-16 h-16 mx-auto text-red-300 mb-4" />
+        <p className="text-xl font-semibold">
+          Failed to load church information
+        </p>
+        <p className="text-gray-400">{error.message}</p>
       </div>
     );
   }
@@ -257,11 +242,11 @@ export default function NodeProfileClean() {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               Church Name
             </label>
-            <input
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
               disabled={!isEditing}
               className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
             />
@@ -320,9 +305,9 @@ export default function NodeProfileClean() {
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
             Description
           </label>
-          <textarea
-            name="description"
-            value={formData.description}
+              <textarea
+                name="description"
+                value={formData.description}
             onChange={handleChange}
             disabled={!isEditing}
             rows={4}
@@ -424,15 +409,15 @@ export default function NodeProfileClean() {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               Street Address
             </label>
-            <input
-              type="text"
-              name="address"
-              value={formData.address}
-              onChange={handleChange}
+              <input
+                type="text"
+                name="address"
+                value={formData.address}
+                onChange={handleChange}
               disabled={!isEditing}
               placeholder="Enter street address"
               className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-            />
+              />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -449,7 +434,7 @@ export default function NodeProfileClean() {
                 placeholder="City"
                 className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
               />
-            </div>
+          </div>
 
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -479,7 +464,7 @@ export default function NodeProfileClean() {
                 placeholder="ZIP Code"
                 className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
               />
-            </div>
+          </div>
 
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">

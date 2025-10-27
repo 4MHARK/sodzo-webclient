@@ -20,6 +20,8 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useIntelligentProjectForm } from "../contexts/IntelligentContexts";
+import { useAuth } from "../contexts/AuthContext";
 
 // Mock project templates data
 const projectTemplates = [
@@ -170,43 +172,139 @@ const categories = [
 ];
 
 export default function Projects() {
+  const navigate = useNavigate();
+  const { projectForms, loading, error } = useIntelligentProjectForm();
+  const { user: authUser, token } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
-  const [filteredProjects, setFilteredProjects] = useState(projectTemplates);
-  const navigate = useNavigate();
 
-  useEffect(() => {
-    let filtered = projectTemplates;
+  // Check if user is authenticated
+  const isAuthenticated = !!(authUser && token);
 
-    // Filter by category
-    if (selectedCategory !== "All") {
-      filtered = filtered.filter(
-        (project) => project.category === selectedCategory
-      );
+  // Function to get appropriate icon based on project category
+  function getIconForProject(category: string) {
+    const iconMap: { [key: string]: any } = {
+      Membership: Users,
+      Events: Calendar,
+      Ministry: Heart,
+      Education: GraduationCap,
+      Media: Camera,
+      Giving: Gift,
+      Fellowship: Home,
+      Feedback: BarChart3,
+      default: FileText,
+    };
+    return iconMap[category] || FileText;
+  }
+
+  // Transform real project forms to match the expected format
+  const transformedProjects = projectForms.map((projectForm) => ({
+    id: projectForm.id,
+    name: projectForm.configuration?.projectName || "Untitled Project",
+    description:
+      projectForm.configuration?.description || "No description available",
+    icon: getIconForProject(projectForm.configuration?.tags?.[0] || "default"),
+    color: "bg-blue-500", // Default color
+    category: projectForm.configuration?.tags?.[0] || "General",
+    fields: projectForm.elements?.length || 0,
+    submissions: projectForm.analytics?.submissions || 0,
+    lastUsed: projectForm.updatedAt
+      ? new Date(projectForm.updatedAt).toISOString().split("T")[0]
+      : "Never",
+    projectId: projectForm.projectId,
+  }));
+
+  // Combine real projects with mock templates for demonstration
+  const allProjects = isAuthenticated ? transformedProjects : projectTemplates;
+
+  // Filter projects based on search and category
+  const filteredProjects = allProjects.filter((project) => {
+    const matchesSearch =
+      project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      project.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory =
+      selectedCategory === "All" || project.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
+
+  // Get unique categories from actual data
+  const categories = ["All", ...new Set(allProjects.map((p) => p.category))];
+
+  // Calculate statistics
+  const stats = {
+    totalForms: allProjects.length,
+    totalSubmissions: allProjects.reduce((sum, p) => sum + p.submissions, 0),
+    activeForms: allProjects.filter((p) => p.status === "active").length,
+  };
+
+  const handleProjectClick = (project: any) => {
+    if (isAuthenticated) {
+      // Navigate to real form renderer with project ID
+      navigate(`/forms/${project.projectId}`);
+    } else {
+      // Navigate to mock form renderer
+      navigate(`/forms/${project.id}`);
     }
-
-    // Filter by search term
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (project) =>
-          project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          project.description.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    setFilteredProjects(filtered);
-  }, [searchTerm, selectedCategory]);
-
-  const handleProjectClick = (projectId: string) => {
-    navigate(`/forms/${projectId}`);
   };
 
   const handleCreateNew = () => {
     navigate("/forms/new");
   };
 
+  // Show loading state
+  if (loading && isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">
+            Loading project forms...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error && isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            Failed to Load Projects
+          </h3>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            {error.message || "Unable to fetch project forms"}
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {/* Authentication Status */}
+      {!isAuthenticated && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+          <div className="flex items-center space-x-2">
+            <div className="w-5 h-5 text-yellow-600">⚠️</div>
+            <span className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+              Demo Mode
+            </span>
+          </div>
+          <p className="text-yellow-700 dark:text-yellow-300 text-sm mt-1">
+            Showing sample project templates. Log in to access real project
+            forms from your organization.
+          </p>
+        </div>
+      )}
+
       {/* Header */}
       <motion.div
         className="flex flex-col sm:flex-row sm:items-center sm:justify-between"
@@ -327,7 +425,7 @@ export default function Projects() {
             transition={{ delay: 0.1 * index }}
             whileHover={{ y: -5, scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => handleProjectClick(project.id)}>
+            onClick={() => handleProjectClick(project)}>
             <div className="flex items-start justify-between mb-4">
               <div className={`p-3 rounded-lg ${project.color}`}>
                 <project.icon className="w-6 h-6 text-white" />
