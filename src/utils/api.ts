@@ -12,7 +12,17 @@ export const API_BASE =
   (import.meta.env.VITE_API_BASE as string) ??
   (import.meta.env.DEV ? "/v1" : "https://api-dev.saby.ai/v1");
 
-const LOCAL_REFRESH_KEY = "saby:refresh_token";
+// API Endpoints from environment variables
+export const API_ENDPOINTS = {
+  AUTH: import.meta.env.VITE_API_AUTH_ENDPOINT || "/auth/login",
+  REFRESH: import.meta.env.VITE_API_REFRESH_ENDPOINT || "/auth/refresh-tokens",
+  LOGOUT: import.meta.env.VITE_API_LOGOUT_ENDPOINT || "/auth/logout",
+  USER: import.meta.env.VITE_API_USER_ENDPOINT || "/user",
+  NODE: import.meta.env.VITE_API_NODE_ENDPOINT || "/node",
+  FORMS: import.meta.env.VITE_API_FORMS_ENDPOINT || "/project-forms",
+};
+
+const LOCAL_REFRESH_KEY = import.meta.env.VITE_REFRESH_TOKEN_KEY || "saby:refresh_token";
 
 // RefreshResponse type was removed because we accept multiple response shapes from the API
 
@@ -84,10 +94,14 @@ export function createAPI(
         : legacy
           ? { refreshToken: legacy }
           : {};
-      const resp = await axios.post(`${API_BASE}/auth/refresh-tokens`, body, {
-        withCredentials: true,
-        headers: { "Content-Type": "application/json" },
-      });
+      const resp = await axios.post(
+        `${API_BASE}${API_ENDPOINTS.REFRESH}`,
+        body,
+        {
+          withCredentials: true,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
       // reset backoff on success
       refreshBackoffMs = 10000;
       refreshCooldownUntil = 0;
@@ -188,10 +202,10 @@ if (import.meta.env.DEV) {
     try {
       console.debug(
         "[debug] checking cookie-based refresh at",
-        `${API_BASE}/auth/refresh-tokens`,
+        `${API_BASE}${API_ENDPOINTS.REFRESH}`
       );
       // try cookie-based refresh (empty body, withCredentials true)
-      const resp = await fetch(`${API_BASE}/auth/refresh-tokens`, {
+      const resp = await fetch(`${API_BASE}${API_ENDPOINTS.REFRESH}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

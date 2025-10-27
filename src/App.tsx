@@ -8,6 +8,7 @@ import Chat from './pages/Chat';
 import Storage from './pages/Storage';
 import Forms from './pages/Forms';
 import Projects from './pages/Projects';
+import FormRenderer from "./pages/FormRenderer";
 import Settings from './pages/Settings';
 import Emails from './pages/Emails';
 import AdminSettings from './pages/AdminSettings';
@@ -17,48 +18,48 @@ import Auth from "./pages/Auth";
 function App() {
   return (
     <>
-    <Toaster position="top-center" />
-    <AuthProvider>
-      <UserProvider>
-      <Router>
-      <Routes>
-        {/* Public routes */}
-        <Route path="/" element={<Landing />} />
-        <Route path="/landing" element={<Landing />} />
-        <Route path="/auth" element={<Auth />} />
-        <Route
-          path="/about"
-          element={
-            <div className="flex items-center justify-center min-h-screen text-3xl font-bold">
-              About Page (Coming Soon)
-            </div>
-          }
-        />
-        <Route
-          path="/policy"
-          element={
-            <div className="flex items-center justify-center min-h-screen text-3xl font-bold">
-              Policy Page (Coming Soon)
-            </div>
-          }
-        />
+      <Toaster position="top-center" />
+      <AuthProvider>
+        <UserProvider>
+          <Router>
+            <Routes>
+              {/* Public routes */}
+              <Route path="/" element={<Landing />} />
+              <Route path="/landing" element={<Landing />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route
+                path="/about"
+                element={
+                  <div className="flex items-center justify-center min-h-screen text-3xl font-bold">
+                    About Page (Coming Soon)
+                  </div>
+                }
+              />
+              <Route
+                path="/policy"
+                element={
+                  <div className="flex items-center justify-center min-h-screen text-3xl font-bold">
+                    Policy Page (Coming Soon)
+                  </div>
+                }
+              />
 
-        {/* Protected app routes under Layout */}
-        <Route path="/" element={<Layout />}>
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="chat" element={<Chat />} />
-          <Route path="emails" element={<Emails />} />
-          <Route path="storage" element={<Storage />} />
-          <Route path="forms" element={<Forms />} />
-          <Route path="projects" element={<Projects />} />
-          <Route path="settings" element={<Settings />} />
-          <Route path="admin" element={<AdminSettings />} />
-        </Route>
-      </Routes>
-    </Router>
-    </UserProvider>
-    </AuthProvider>
-    
+              {/* Protected app routes under Layout */}
+              <Route path="/" element={<Layout />}>
+                <Route path="dashboard" element={<Dashboard />} />
+                <Route path="chat" element={<Chat />} />
+                <Route path="emails" element={<Emails />} />
+                <Route path="storage" element={<Storage />} />
+                <Route path="forms" element={<Forms />} />
+                <Route path="projects" element={<Projects />} />
+                <Route path="forms/:formId" element={<FormRenderer />} />
+                <Route path="settings" element={<Settings />} />
+                <Route path="admin" element={<AdminSettings />} />
+              </Route>
+            </Routes>
+          </Router>
+        </UserProvider>
+      </AuthProvider>
     </>
   );
 }

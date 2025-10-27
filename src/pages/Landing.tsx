@@ -6,12 +6,13 @@ import {
   AnimatePresence,
 } from "framer-motion";
 import AuthModal from "../components/AuthModal";
+import { getRandomUserAvatar } from "../utils/env";
 
 const avatars = [
-  "https://randomuser.me/api/portraits/men/32.jpg",
-  "https://randomuser.me/api/portraits/women/44.jpg",
-  "https://randomuser.me/api/portraits/men/45.jpg",
-  "https://randomuser.me/api/portraits/women/46.jpg",
+  getRandomUserAvatar("men", 32),
+  getRandomUserAvatar("women", 44),
+  getRandomUserAvatar("men", 45),
+  getRandomUserAvatar("women", 46),
 ];
 
 const features = [
@@ -44,21 +45,21 @@ const testimonials = [
     role: "Senior Minister",
     content:
       "This platform has revolutionized how we collect and manage ministry data. Highly recommended!",
-    avatar: "https://randomuser.me/api/portraits/men/1.jpg",
+    avatar: getRandomUserAvatar("men", 1),
   },
   {
     name: "Sarah Johnson",
     role: "Department Head",
     content:
       "The security features give us peace of mind, and the organization tools are incredible.",
-    avatar: "https://randomuser.me/api/portraits/women/2.jpg",
+    avatar: getRandomUserAvatar("women", 2),
   },
   {
     name: "Michael Brown",
     role: "Administrator",
     content:
       "Streamlined workflow that saves us hours every week. The best ministry platform we've used.",
-    avatar: "https://randomuser.me/api/portraits/men/3.jpg",
+    avatar: getRandomUserAvatar("men", 3),
   },
 ];
 

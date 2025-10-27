@@ -1,5 +1,6 @@
 import { User, Project, ChatMessage, FileItem, FormTemplate, DashboardMetric } from '../types';
 import { EmailMessage } from '../types';
+import { getRandomUserAvatar } from "../utils/env";
 
 
 export const mockUser: User[] = [
@@ -26,7 +27,7 @@ export const mockUser: User[] = [
     firstname: "Sarah",
     lastname: "Johnson",
     email: "sarah.johnson@example.com",
-    avatar: "https://randomuser.me/api/portraits/women/1.jpg",
+    avatar: getRandomUserAvatar("women", 1),
     roles: [],
     isOwner: false,
     isSuper: false,
@@ -44,7 +45,7 @@ export const mockUser: User[] = [
     firstname: "Michael",
     lastname: "Chen",
     email: "michael.chen@example.com",
-    avatar: "https://randomuser.me/api/portraits/men/2.jpg",
+    avatar: getRandomUserAvatar("men", 2),
     roles: [],
     isOwner: true,
     isSuper: false,
@@ -62,7 +63,7 @@ export const mockUser: User[] = [
     firstname: "Emily",
     lastname: "Rodriguez",
     email: "emily.rodriguez@example.com",
-    avatar: "https://randomuser.me/api/portraits/women/3.jpg",
+    avatar: getRandomUserAvatar("women", 3),
     roles: [],
     isOwner: false,
     isSuper: false,
@@ -80,7 +81,7 @@ export const mockUser: User[] = [
     firstname: "David",
     lastname: "Kim",
     email: "david.kim@example.com",
-    avatar: "https://randomuser.me/api/portraits/men/4.jpg",
+    avatar: getRandomUserAvatar("men", 4),
     roles: [],
     isOwner: true,
     isSuper: false,
@@ -98,7 +99,7 @@ export const mockUser: User[] = [
     firstname: "Olivia",
     lastname: "Brown",
     email: "olivia.brown@example.com",
-    avatar: "https://randomuser.me/api/portraits/women/5.jpg",
+    avatar: getRandomUserAvatar("women", 5),
     roles: [],
     isOwner: false,
     isSuper: false,
@@ -110,7 +111,7 @@ export const mockUser: User[] = [
     createdAt: "2025-04-15T05:33:17.330Z",
     haloId: "HL-0008H",
     status: true,
-  }
+  },
 ];
 
 

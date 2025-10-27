@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, ReactNode, useCallback, useRef, useEffect } from "react";
 import axios from 'axios';
-import { createAPI } from "../utils/api";
+import { createAPI, API_ENDPOINTS } from "../utils/api";
 import type { AxiosInstance } from 'axios';
 
 // User model derived from /auth/login and GET /user/{id}
@@ -79,17 +79,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           });
         } else {
           // Fallback: call refresh endpoint directly
-          apiRef.current?.post('/auth/refresh-tokens', {}, { withCredentials: true }).then((resp) => {
-            const data = resp.data as any;
-            const userResp = data?.user ?? null;
-            const accessToken = data?.access?.token ?? data?.tokens?.access?.token ?? data?.access_token ?? data?.token ?? null;
-            const newRefresh = data?.refresh?.token ?? data?.tokens?.refresh?.token ?? data?.refresh_token ?? data?.refreshToken ?? null;
-            if (userResp) setUser(userResp);
-            if (accessToken) setTokenStateSafe(accessToken);
-            if (newRefresh) refreshTokenRef.current = newRefresh;
-          }).catch(() => {
-            // ignore
-          });
+          apiRef.current
+            ?.post(API_ENDPOINTS.REFRESH, {}, { withCredentials: true })
+            .then((resp) => {
+              const data = resp.data as any;
+              const userResp = data?.user ?? null;
+              const accessToken =
+                data?.access?.token ??
+                data?.tokens?.access?.token ??
+                data?.access_token ??
+                data?.token ??
+                null;
+              const newRefresh =
+                data?.refresh?.token ??
+                data?.tokens?.refresh?.token ??
+                data?.refresh_token ??
+                data?.refreshToken ??
+                null;
+              if (userResp) setUser(userResp);
+              if (accessToken) setTokenStateSafe(accessToken);
+              if (newRefresh) refreshTokenRef.current = newRefresh;
+            })
+            .catch(() => {
+              // ignore
+            });
         }
       } catch (e) {
         // swallow
@@ -101,9 +114,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Notify backend so it can clear its cookies.
     try {
       const body = refreshTokenRef.current ? { refreshToken: refreshTokenRef.current } : {};
-      apiRef.current?.post('/auth/logout', body, { withCredentials: true }).catch(() => {});
+      apiRef.current
+        ?.post(API_ENDPOINTS.LOGOUT, body, { withCredentials: true })
+        .catch(() => {});
     } catch {
-      apiRef.current?.post('/auth/logout', {}, { withCredentials: true }).catch(() => {});
+      apiRef.current
+        ?.post(API_ENDPOINTS.LOGOUT, {}, { withCredentials: true })
+        .catch(() => {});
     }
 
     // Clear only in-memory state. Do not attempt to read/clear tokens from localStorage; cookies are cleared by the server.
@@ -119,7 +136,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = useCallback(async (email: string, password: string) => {
     try {
       // In cookie-only mode the backend should set HttpOnly cookies on successful login.
-      const resp = await apiRef.current!.post('/auth/login', { email, password }, { withCredentials: true });
+      const resp = await apiRef.current!.post(
+        API_ENDPOINTS.AUTH,
+        { email, password },
+        { withCredentials: true }
+      );
       const data = resp.data as any;
       const userResp: User | undefined = data.user ?? data ?? null;
 

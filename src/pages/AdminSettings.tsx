@@ -1,27 +1,17 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   Shield,
   Key,
-  Globe,
-  Mail,
-  MessageSquare,
-  Phone,
-  Smartphone,
   Server,
-  Database,
-  Webhook,
   Eye,
   EyeOff,
   Save,
   TestTube,
   AlertTriangle,
-  CheckCircle,
   Copy,
   RefreshCw,
   Settings,
-  Lock,
-  Unlock,
 } from "lucide-react";
 
 interface ApiConfig {
@@ -32,6 +22,15 @@ interface ApiConfig {
   enabled: boolean;
   lastTested?: Date;
   status: "active" | "inactive" | "error";
+}
+
+interface FormEndpointConfig {
+  id: string;
+  name: string;
+  endpoint: string;
+  method: "POST" | "PUT" | "PATCH";
+  enabled: boolean;
+  description: string;
 }
 
 // interface CommunicationConfig {
@@ -51,9 +50,12 @@ export default function AdminSettings() {
   const [apiConfigs, setApiConfigs] = useState<ApiConfig[]>([
     {
       id: "1",
-      name: "Saby AI",
-      endpoint: "https://api-dev.saby.ai/v1",
-      apiKey: "sk-proj-1234567890abcdef",
+      name: import.meta.env.VITE_DEFAULT_API_NAME || "Saby AI",
+      endpoint:
+        import.meta.env.VITE_DEFAULT_API_ENDPOINT ||
+        "https://api-dev.saby.ai/v1",
+      apiKey:
+        import.meta.env.VITE_DEFAULT_API_KEY || "sk-proj-1234567890abcdef",
       enabled: true,
       lastTested: new Date(),
       status: "active",
@@ -75,6 +77,33 @@ export default function AdminSettings() {
     //   enabled: false,
     //   status: 'inactive'
     // }
+  ]);
+
+  const [formEndpoints, setFormEndpoints] = useState<FormEndpointConfig[]>([
+    {
+      id: "1",
+      name: "Form Submissions",
+      endpoint: "/api/forms/submit",
+      method: "POST",
+      enabled: true,
+      description: "Submit form data to the main database",
+    },
+    {
+      id: "2",
+      name: "Email Notifications",
+      endpoint: "/api/forms/notify",
+      method: "POST",
+      enabled: true,
+      description: "Send email notifications for form submissions",
+    },
+    {
+      id: "3",
+      name: "Webhook Integration",
+      endpoint: "/api/webhooks/form-submission",
+      method: "POST",
+      enabled: false,
+      description: "Forward form data to external webhook services",
+    },
   ]);
 
   // const [communicationConfigs, setCommunicationConfigs] = useState<CommunicationConfig[]>([
@@ -159,8 +188,8 @@ export default function AdminSettings() {
         prev.map((api) =>
           api.id === id
             ? { ...api, lastTested: new Date(), status: "active" }
-            : api,
-        ),
+            : api
+        )
       );
       setTestingApi(null);
     }, 2000);
@@ -176,12 +205,13 @@ export default function AdminSettings() {
       Math.random().toString(36).substring(2, 15) +
       Math.random().toString(36).substring(2, 15);
     setApiConfigs((prev) =>
-      prev.map((api) => (api.id === id ? { ...api, apiKey: newKey } : api)),
+      prev.map((api) => (api.id === id ? { ...api, apiKey: newKey } : api))
     );
   };
 
   const tabs = [
     { id: "api-keys", name: "API Keys", icon: Key },
+    { id: "form-endpoints", name: "Form Endpoints", icon: Settings },
     // { id: 'communications', name: 'Communications', icon: MessageSquare },
     // { id: 'webhooks', name: 'Webhooks', icon: Webhook },
     // { id: 'database', name: 'Database', icon: Database },
@@ -202,8 +232,7 @@ export default function AdminSettings() {
         <motion.button
           className="hidden px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-        >
+          whileTap={{ scale: 0.95 }}>
           Add New API
         </motion.button>
       </div>
@@ -215,8 +244,7 @@ export default function AdminSettings() {
             className="bg-gray-50 dark:bg-gray-700 rounded-lg p-6 border border-gray-200 dark:border-gray-600"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            whileHover={{ scale: 1.01 }}
-          >
+            whileHover={{ scale: 1.01 }}>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-3">
                 <div
@@ -224,17 +252,16 @@ export default function AdminSettings() {
                     api.status === "active"
                       ? "bg-green-100 dark:bg-green-900/20"
                       : api.status === "error"
-                        ? "bg-red-100 dark:bg-red-900/20"
-                        : "bg-gray-100 dark:bg-gray-600"
-                  }`}
-                >
+                      ? "bg-red-100 dark:bg-red-900/20"
+                      : "bg-gray-100 dark:bg-gray-600"
+                  }`}>
                   <Server
                     className={`w-5 h-5 ${
                       api.status === "active"
                         ? "text-green-600 dark:text-green-400"
                         : api.status === "error"
-                          ? "text-red-600 dark:text-red-400"
-                          : "text-gray-600 dark:text-gray-400"
+                        ? "text-red-600 dark:text-red-400"
+                        : "text-gray-600 dark:text-gray-400"
                     }`}
                   />
                 </div>
@@ -253,24 +280,22 @@ export default function AdminSettings() {
                     api.status === "active"
                       ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300"
                       : api.status === "error"
-                        ? "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300"
-                        : "bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-300"
-                  }`}
-                >
+                      ? "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300"
+                      : "bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-300"
+                  }`}>
                   {api.status}
                 </div>
                 <button
                   onClick={() =>
                     setApiConfigs((prev) =>
                       prev.map((a) =>
-                        a.id === api.id ? { ...a, enabled: !a.enabled } : a,
-                      ),
+                        a.id === api.id ? { ...a, enabled: !a.enabled } : a
+                      )
                     )
                   }
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                     api.enabled ? "bg-blue-600" : "bg-gray-200 dark:bg-gray-600"
-                  }`}
-                >
+                  }`}>
                   <span
                     className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
                       api.enabled ? "translate-x-6" : "translate-x-1"
@@ -310,16 +335,15 @@ export default function AdminSettings() {
                           prev.map((a) =>
                             a.id === api.id
                               ? { ...a, apiKey: e.target.value }
-                              : a,
-                          ),
+                              : a
+                          )
                         )
                       }
                       className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                     <button
                       onClick={() => toggleApiKeyVisibility(api.id)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600">
                       {showApiKeys[api.id] ? (
                         <EyeOff className="w-4 h-4" />
                       ) : (
@@ -331,16 +355,14 @@ export default function AdminSettings() {
                     onClick={() => copyToClipboard(api.apiKey)}
                     className="p-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
+                    whileTap={{ scale: 0.95 }}>
                     <Copy className="w-4 h-4 text-gray-500" />
                   </motion.button>
                   <motion.button
                     onClick={() => generateNewApiKey(api.id)}
                     className="p-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
+                    whileTap={{ scale: 0.95 }}>
                     <RefreshCw className="w-4 h-4 text-gray-500" />
                   </motion.button>
                 </div>
@@ -360,8 +382,7 @@ export default function AdminSettings() {
                 disabled={testingApi === api.id}
                 className="inline-flex items-center px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"
                 whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
+                whileTap={{ scale: 0.95 }}>
                 {testingApi === api.id ? (
                   <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
                 ) : (
@@ -369,6 +390,132 @@ export default function AdminSettings() {
                 )}
                 Test Connection
               </motion.button>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderFormEndpointsTab = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Form Submission Endpoints
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Configure endpoints for form data submission and processing
+          </p>
+        </div>
+        <motion.button
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}>
+          Add New Endpoint
+        </motion.button>
+      </div>
+
+      <div className="space-y-4">
+        {formEndpoints.map((endpoint) => (
+          <motion.div
+            key={endpoint.id}
+            className="bg-gray-50 dark:bg-gray-700 rounded-lg p-6 border border-gray-200 dark:border-gray-600"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            whileHover={{ scale: 1.01 }}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-blue-100 dark:bg-blue-900/20 rounded-lg">
+                  <Settings className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <h4 className="font-medium text-gray-900 dark:text-white">
+                    {endpoint.name}
+                  </h4>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {endpoint.description}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div
+                  className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    endpoint.enabled
+                      ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300"
+                      : "bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-300"
+                  }`}>
+                  {endpoint.enabled ? "Enabled" : "Disabled"}
+                </div>
+                <button
+                  onClick={() =>
+                    setFormEndpoints((prev) =>
+                      prev.map((e) =>
+                        e.id === endpoint.id ? { ...e, enabled: !e.enabled } : e
+                      )
+                    )
+                  }
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    endpoint.enabled
+                      ? "bg-blue-600"
+                      : "bg-gray-200 dark:bg-gray-600"
+                  }`}>
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      endpoint.enabled ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Endpoint URL
+                </label>
+                <input
+                  type="text"
+                  value={endpoint.endpoint}
+                  onChange={(e) =>
+                    setFormEndpoints((prev) =>
+                      prev.map((ep) =>
+                        ep.id === endpoint.id
+                          ? { ...ep, endpoint: e.target.value }
+                          : ep
+                      )
+                    )
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  HTTP Method
+                </label>
+                <select
+                  value={endpoint.method}
+                  onChange={(e) =>
+                    setFormEndpoints((prev) =>
+                      prev.map((ep) =>
+                        ep.id === endpoint.id
+                          ? {
+                              ...ep,
+                              method: e.target.value as
+                                | "POST"
+                                | "PUT"
+                                | "PATCH",
+                            }
+                          : ep
+                      )
+                    )
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                  <option value="POST">POST</option>
+                  <option value="PUT">PUT</option>
+                  <option value="PATCH">PATCH</option>
+                </select>
+              </div>
             </div>
           </motion.div>
         ))}
@@ -385,8 +532,7 @@ export default function AdminSettings() {
         className="flex items-center justify-between"
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
+        transition={{ duration: 0.5 }}>
         <div className="flex items-center space-x-3">
           <div className="p-3 bg-red-100 dark:bg-red-900/20 rounded-lg">
             <Shield className="w-6 h-6 text-red-600 dark:text-red-400" />
@@ -412,8 +558,7 @@ export default function AdminSettings() {
         className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4"
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.1 }}
-      >
+        transition={{ delay: 0.1 }}>
         <div className="flex items-center space-x-3">
           <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
           <div>
@@ -435,8 +580,7 @@ export default function AdminSettings() {
             className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4"
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2 }}
-          >
+            transition={{ delay: 0.2 }}>
             <nav className="space-y-2">
               {tabs.map((tab) => (
                 <motion.button
@@ -448,8 +592,7 @@ export default function AdminSettings() {
                       : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                   }`}
                   whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
+                  whileTap={{ scale: 0.98 }}>
                   <tab.icon className="w-4 h-4 mr-3" />
                   {tab.name}
                 </motion.button>
@@ -464,9 +607,9 @@ export default function AdminSettings() {
             className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.3 }}
-          >
+            transition={{ delay: 0.3 }}>
             {activeTab === "api-keys" && renderApiKeysTab()}
+            {activeTab === "form-endpoints" && renderFormEndpointsTab()}
             {/* All other tab content is commented out */}
             {/* {activeTab === 'communications' && renderCommunicationsTab()} */}
             {/* {activeTab === 'webhooks' && renderWebhooksTab()} */}
@@ -482,8 +625,7 @@ export default function AdminSettings() {
                 <motion.button
                   className="inline-flex items-center px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                   whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
+                  whileTap={{ scale: 0.95 }}>
                   <Save className="w-4 h-4 mr-2" />
                   Save All Changes
                 </motion.button>
