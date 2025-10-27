@@ -1,340 +1,219 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Eye, Copy, FileText } from 'lucide-react';
-import { mockFormTemplates } from '../data/mockData';
-import { FormTemplate, FormField } from '../types';
-import toast, { Toaster } from 'react-hot-toast';
+import React, { useEffect, useState } from "react";
+import { useAuth } from "../contexts/AuthContext";
+import { FileText, Loader2 } from "lucide-react";
+
+interface FormElement {
+  id: string;
+  type: string;
+  properties: {
+    label?: string;
+    placeholder?: string;
+    options?: string[];
+    required?: boolean;
+  };
+}
 
 export default function Forms() {
-  const [templates, setTemplates] = useState(mockFormTemplates);
-  const [selectedTemplate, setSelectedTemplate] = useState<FormTemplate | null>(null);
-  const [isPreviewMode, setIsPreviewMode] = useState(false);
-  const [formValues, setFormValues] = useState<{ [key: string]: any }>({});
-  const [showFillWarning, setShowFillWarning] = useState(false);
+  const { api } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [forms, setForms] = useState<any[]>([]);
+  const [form, setForm] = useState<any>(null);
+  const [values, setValues] = useState<Record<string, any>>({});
+  const [activeFormId, setActiveFormId] = useState<string | null>(null);
 
-  const getFieldIcon = (type: string) => {
-    switch (type) {
-      case 'email':
-        return '📧';
-      case 'textarea':
-        return '📝';
-      case 'select':
-        return '📋';
-      case 'checkbox':
-        return '☑️';
-      case 'radio':
-        return '🔘';
-      default:
-        return '📄';
-    }
-  };
-
-  const handleFieldChange = (field: FormField, value: any) => {
-    setFormValues(prev => ({
-      ...prev,
-      [field.id]: value,
-    }));
-  };
-
-  const renderFormField = (field: FormField, isPreview: boolean = false) => {
-    const baseClasses = "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent";
-    const value = formValues[field.id] ?? (field.type === 'checkbox' ? false : '');
-
-    switch (field.type) {
-      case 'text':
-      case 'email':
-        return (
-          <input
-            type={field.type}
-            placeholder={`Enter ${field.label.toLowerCase()}`}
-            className={baseClasses}
-            required={field.required}
-            disabled={!isPreview}
-            value={value}
-            onChange={isPreview ? (e) => handleFieldChange(field, e.target.value) : undefined}
-          />
-        );
-      case 'textarea':
-        return (
-          <textarea
-            placeholder={`Enter ${field.label.toLowerCase()}`}
-            rows={3}
-            className={baseClasses}
-            required={field.required}
-            disabled={!isPreview}
-            value={value}
-            onChange={isPreview ? (e) => handleFieldChange(field, e.target.value) : undefined}
-          />
-        );
-      case 'select':
-        return (
-          <select
-            className={baseClasses}
-            required={field.required}
-            disabled={!isPreview}
-            value={value}
-            onChange={isPreview ? (e) => handleFieldChange(field, e.target.value) : undefined}
-          >
-            <option value="">Select an option</option>
-            {field.options?.map((option, index) => (
-              <option key={index} value={option}>{option}</option>
-            ))}
-          </select>
-        );
-      case 'checkbox':
-        return (
-          <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-              disabled={!isPreview}
-              checked={!!value}
-              onChange={isPreview ? (e) => handleFieldChange(field, e.target.checked) : undefined}
-            />
-            <span className="text-sm text-gray-700">I agree to the terms</span>
-          </div>
-        );
-      case 'radio':
-        return (
-          <div className="space-y-2">
-            {field.options?.map((option, index) => (
-              <div key={index} className="flex items-center space-x-2">
-                <input
-                  type="radio"
-                  name={field.id}
-                  value={option}
-                  className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                  disabled={!isPreview}
-                  checked={value === option}
-                  onChange={isPreview ? () => handleFieldChange(field, option) : undefined}
-                />
-                <span className="text-sm text-gray-700">{option}</span>
-              </div>
-            ))}
-          </div>
-        );
-      default:
-        return null;
-    }
-  };
-
-  const isFormComplete = selectedTemplate
-    ? selectedTemplate.fields.every(field => {
-        if (!field.required) return true;
-        const value = formValues[field.id];
-        if (field.type === 'checkbox') return !!value;
-        return value !== undefined && value !== '';
-      })
-    : false;
-
-  // Confirm toast with promise
-  const confirmToast = (message: string): Promise<boolean> => {
-    return new Promise((resolve) => {
-      toast(
-        (t) => (
-          <span>
-            {message}
-            <div className="mt-2 flex gap-2">
-              <button
-                className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
-                onClick={() => {
-                  toast.dismiss(t.id);
-                  resolve(true);
-                }}
-              >
-                Yes
-              </button>
-              <button
-                className="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
-                onClick={() => {
-                  toast.dismiss(t.id);
-                  resolve(false);
-                }}
-              >
-                No
-              </button>
-            </div>
-          </span>
-        ),
-        { duration: 10000 }
-      );
-    });
-  };
-
-  // Handle submit: show warning if incomplete, else confirm and reset if confirmed
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!isFormComplete) {
-      setShowFillWarning(true);
-      return;
-    }
-    setShowFillWarning(false);
-    const confirmed = await confirmToast('Are you sure you want to submit the form?');
-    if (confirmed) {
-      toast.success('Form submitted successfully!');
-      setFormValues({});
-      setIsPreviewMode(false);
-    }
-  };
-
-  // Reset warning if user completes the form after warning
   useEffect(() => {
-    if (isFormComplete && showFillWarning) {
-      setShowFillWarning(false);
+    const fetchForms = async () => {
+      try {
+        const listRes = await api.get("/project-forms/");
+        const results = listRes.data?.results || [];
+        setForms(results);
+
+        if (results.length > 0) {
+          const first = results[0];
+          if (first.projectId) {
+            setActiveFormId(first.projectId);
+            await loadForm(first.projectId);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching forms:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchForms();
+  }, [api]);
+
+  const loadForm = async (projectId: string) => {
+    try {
+      setLoading(true);
+      const res = await api.get(`/project-forms/project/${projectId}`);
+      setForm(res.data);
+    } catch (error) {
+      console.error("Error loading form:", error);
+    } finally {
+      setLoading(false);
     }
-  }, [isFormComplete, showFillWarning]);
+  };
+
+  const handleChange = (id: string, value: any) => {
+    setValues((prev) => ({ ...prev, [id]: value }));
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-[60vh] text-gray-600">
+        <Loader2 className="animate-spin w-8 h-8 mr-2" />
+        Loading forms...
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <Toaster position="top-center" />
-      {/* Form Statistics */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Form Analytics</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="text-center p-4 bg-blue-50 rounded-lg">
-            <div className="text-2xl font-bold text-blue-600">127</div>
-            <div className="text-sm text-gray-600">Total Submissions</div>
-          </div>
-          <div className="text-center p-4 bg-green-50 rounded-lg">
-            <div className="text-2xl font-bold text-green-600">89%</div>
-            <div className="text-sm text-gray-600">Completion Rate</div>
-          </div>
-          <div className="text-center p-4 bg-purple-50 rounded-lg">
-            <div className="text-2xl font-bold text-purple-600">3.2</div>
-            <div className="text-sm text-gray-600">Avg. Time (min)</div>
-          </div>
-        </div>
-      </div>
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Form Templates</h1>
-          <p className="text-gray-600 mt-1">Create and manage dynamic forms</p>
-        </div>
-        {/* <button className="mt-4 sm:mt-0 inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-          <Plus className="w-4 h-4 mr-2" />
-          Create Form
-        </button> */}
-      </div>
+    <div className="flex flex-col md:flex-row max-w-6xl mx-auto p-6 gap-6 bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
+      {/* Sidebar */}
+      <div className="w-full md:w-1/4 bg-white shadow-lg rounded-2xl p-4 border border-gray-100">
+        <h2 className="text-xl font-semibold mb-4 text-gray-800 flex items-center gap-2">
+          <FileText className="text-blue-600 w-5 h-5" />
+          Available Forms
+        </h2>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-6">
-
-        {/* Templates List */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Form Templates</h2>
-          <div className="space-y-3">
-            {templates.map((template) => (
-              <div
-                key={template.id}
-                className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                  selectedTemplate?.id === template.id
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300'
+        <div className="space-y-2">
+          {forms.map((f) => (
+            <button
+              key={f.projectId}
+              onClick={() => {
+                setActiveFormId(f.projectId);
+                loadForm(f.projectId);
+              }}
+              className={`w-full text-left px-4 py-3 rounded-xl font-medium transition-all duration-200 flex items-center justify-between
+                ${
+                  activeFormId === f.projectId
+                    ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md scale-[1.02]"
+                    : "bg-gray-100 hover:bg-gray-200 text-gray-700"
                 }`}
-                onClick={() => {
-                  setSelectedTemplate(template);
-                  setFormValues({});
-                  setIsPreviewMode(false);
-                }}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-2 bg-blue-100 rounded-lg">
-                      <FileText className="w-5 h-5 text-blue-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-gray-900">{template.name}</h3>
-                      <p className="text-sm text-gray-500">{template.description}</p>
-                      <p className="text-xs text-gray-400 mt-1">
-                        {template.fields.length} fields • Created {template.createdAt.toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-1">
-                    <button className="p-1 hover:bg-gray-100 rounded">
-                      <Edit className="w-4 h-4 text-gray-500" />
-                    </button>
-                    <button className="p-1 hover:bg-gray-100 rounded">
-                      <Copy className="w-4 h-4 text-gray-500" />
-                    </button>
-                    <button className="p-1 hover:bg-gray-100 rounded">
-                      <Trash2 className="w-4 h-4 text-gray-500" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
+            >
+              {f.configuration?.projectName || "Untitled Form"}
+              {activeFormId === f.projectId && (
+                <span className="ml-2 text-sm opacity-80">●</span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Main Form Area */}
+      <div className="flex-1">
+        {!form ? (
+          <div className="flex flex-col items-center justify-center h-full py-20 text-gray-500 bg-white rounded-2xl shadow-inner">
+            <FileText className="w-10 h-10 mb-3 text-gray-400" />
+            No form available to display.
           </div>
-        </div>
+        ) : (
+          <div className="bg-white shadow-lg rounded-3xl p-10 border border-gray-100">
+            <h1 className="text-3xl font-semibold mb-8 text-center text-gray-800">
+              {form.configuration?.projectName || "Untitled Form"}
+            </h1>
 
-        {/* Form Preview/Editor */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          {selectedTemplate ? (
-            <>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">{selectedTemplate.name}</h2>
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => setIsPreviewMode(!isPreviewMode)}
-                    className={`px-3 py-1 text-sm rounded-lg transition-colors ${
-                      isPreviewMode
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    <Eye className="w-4 h-4 inline mr-1" />
-                    {isPreviewMode ? 'Previewing' : 'Preview'}
-                  </button>
-                </div>
-              </div>
+            <div className="space-y-6">
+              {form.elements?.map((el: FormElement) => {
+                const { id, type, properties } = el;
 
-              <form
-                className="space-y-4"
-                onSubmit={handleSubmit}
-                autoComplete="off"
+                switch (type) {
+                  case "header":
+                    return (
+                      <h2
+                        key={id}
+                        className="text-xl font-bold text-center text-gray-700 mb-4"
+                      >
+                        {properties.label}
+                      </h2>
+                    );
+
+                  case "number":
+                    return (
+                      <div key={id} className="flex flex-col">
+                        <label className="mb-2 font-semibold text-gray-700">
+                          {properties.label}
+                        </label>
+                        <input
+                          type="number"
+                          placeholder={properties.placeholder || ""}
+                          value={values[id] || ""}
+                          onChange={(e) => handleChange(id, e.target.value)}
+                          className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+                        />
+                      </div>
+                    );
+
+                  case "textarea":
+                    return (
+                      <div key={id} className="flex flex-col">
+                        <label className="mb-2 font-semibold text-gray-700">
+                          {properties.label}
+                        </label>
+                        <textarea
+                          placeholder={properties.placeholder || ""}
+                          value={values[id] || ""}
+                          onChange={(e) => handleChange(id, e.target.value)}
+                          className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+                          rows={4}
+                        />
+                      </div>
+                    );
+
+                  case "dropdown":
+                    return (
+                      <div key={id} className="flex flex-col">
+                        <label className="mb-2 font-semibold text-gray-700">
+                          {properties.label}
+                        </label>
+                        <select
+                          value={values[id] || ""}
+                          onChange={(e) => handleChange(id, e.target.value)}
+                          className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+                        >
+                          <option value="">Select...</option>
+                          {properties.options?.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+
+                  case "datepicker":
+                    return (
+                      <div key={id} className="flex flex-col">
+                        <label className="mb-2 font-semibold text-gray-700">
+                          {properties.label}
+                        </label>
+                        <input
+                          type="date"
+                          value={values[id] || ""}
+                          onChange={(e) => handleChange(id, e.target.value)}
+                          className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+                        />
+                      </div>
+                    );
+
+                  default:
+                    return null;
+                }
+              })}
+
+              <button
+                type="button"
+                onClick={() => console.log("Form values:", values)}
+                className="w-full mt-8 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-3 rounded-xl transition-all duration-300 shadow-md"
               >
-                {selectedTemplate.fields.map((field) => (
-                  <div key={field.id} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium text-gray-700">
-                        {getFieldIcon(field.type)} {field.label}
-                        {field.required && <span className="text-red-500 ml-1">*</span>}
-                      </label>
-                      {!isPreviewMode && (
-                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                          {field.type}
-                        </span>
-                      )}
-                    </div>
-                    {renderFormField(field, isPreviewMode)}
-                  </div>
-                ))}
-
-                {isPreviewMode && (
-                  <div className="pt-4 border-t border-gray-200">
-                    <button
-                      className={`w-full py-2 px-4 rounded-lg transition-colors ${
-                        showFillWarning
-                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                          : 'bg-blue-600 text-white hover:bg-blue-700'
-                      }`}
-                      type="submit"
-                    >
-                      {showFillWarning
-                        ? 'Fill all required fields to submit'
-                        : 'Submit Form'}
-                    </button>
-                  </div>
-                )}
-              </form>
-            </>
-          ) : (
-            <div className="text-center py-12">
-              <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Form Selected</h3>
-              <p className="text-gray-500">Select a form template to preview or edit</p>
+                Save (Logs values for now)
+              </button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,11 +1,18 @@
-import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
+import axios, {
+  AxiosError,
+  AxiosInstance,
+  InternalAxiosRequestConfig,
+} from "axios";
 
 // Vite env: use VITE_API_BASE for flexible dev/prod bases.
 // For local development we recommend setting VITE_API_BASE=/v1 and using the Vite proxy (see vite.config.ts).
 // Prefer explicit VITE_API_BASE, otherwise use a dev-relative path when in development
 // so the Vite proxy forwards requests to the staging API and avoids CORS.
-export const API_BASE = (import.meta.env.VITE_API_BASE as string) ?? (import.meta.env.DEV ? '/v1' : 'https://api-staging.saby.ai/v1');
-const LOCAL_REFRESH_KEY = 'saby:refresh_token';
+export const API_BASE =
+  (import.meta.env.VITE_API_BASE as string) ??
+  (import.meta.env.DEV ? "/v1" : "https://api-dev.saby.ai/v1");
+
+const LOCAL_REFRESH_KEY = "saby:refresh_token";
 
 // RefreshResponse type was removed because we accept multiple response shapes from the API
 
@@ -13,11 +20,11 @@ export function createAPI(
   getAccessToken?: () => string | null,
   setAccessToken?: (t: string | null) => void,
   getRefreshToken?: () => string | null,
-  onAuthFailure?: () => void
+  onAuthFailure?: () => void,
 ): AxiosInstance {
   const api = axios.create({
     baseURL: API_BASE,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { "Content-Type": "application/json" },
     // Send cookies (HttpOnly access/refresh cookies) by default. Backend must allow credentials via CORS.
     withCredentials: true,
   });
@@ -27,7 +34,8 @@ export function createAPI(
     try {
       const token = getAccessToken ? getAccessToken() : null;
       if (token && config.headers) {
-        (config.headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+        (config.headers as Record<string, string>)["Authorization"] =
+          `Bearer ${token}`;
       }
     } catch (e) {
       // ignore
@@ -57,19 +65,29 @@ export function createAPI(
   // doRefresh is the single place that actually calls the refresh endpoint and applies backoff on 429
   const doRefresh = async () => {
     if (inCooldown()) {
-      const err: any = new Error('Refresh cooldown');
+      const err: any = new Error("Refresh cooldown");
       err.status = 429;
       throw err;
     }
     try {
       // Prefer cookie-based refresh (empty body, with credentials). If the server requires a refresh token
       // in the body and we have one available via getRefreshToken, include it as a fallback.
-  const refreshToken = getRefreshToken ? getRefreshToken() : null;
-  // Temporary fallback: if we don't have an in-memory refresh token but a legacy localStorage key exists,
-  // include it in the body. This helps during migration; we avoid writing to localStorage in new code paths.
-  const legacy = typeof localStorage !== 'undefined' ? localStorage.getItem(LOCAL_REFRESH_KEY) : null;
-  const body = refreshToken ? { refreshToken } : (legacy ? { refreshToken: legacy } : {});
-  const resp = await axios.post(`${API_BASE}/auth/refresh-tokens`, body, { withCredentials: true, headers: { 'Content-Type': 'application/json' } });
+      const refreshToken = getRefreshToken ? getRefreshToken() : null;
+      // Temporary fallback: if we don't have an in-memory refresh token but a legacy localStorage key exists,
+      // include it in the body. This helps during migration; we avoid writing to localStorage in new code paths.
+      const legacy =
+        typeof localStorage !== "undefined"
+          ? localStorage.getItem(LOCAL_REFRESH_KEY)
+          : null;
+      const body = refreshToken
+        ? { refreshToken }
+        : legacy
+          ? { refreshToken: legacy }
+          : {};
+      const resp = await axios.post(`${API_BASE}/auth/refresh-tokens`, body, {
+        withCredentials: true,
+        headers: { "Content-Type": "application/json" },
+      });
       // reset backoff on success
       refreshBackoffMs = 10000;
       refreshCooldownUntil = 0;
@@ -84,7 +102,6 @@ export function createAPI(
       throw e;
     }
   };
-
 
   const processQueue = (error: unknown) => {
     failedQueue.forEach(({ resolve, reject }) => {
@@ -117,9 +134,15 @@ export function createAPI(
 
           // If the server returns a new access token in the response body, update in-memory token.
           try {
-            const data = (resp && resp.data) ? resp.data as any : null;
-            const newAccess = data?.access?.token ?? data?.tokens?.access?.token ?? data?.access_token ?? data?.token ?? null;
-            if (newAccess && typeof setAccessToken === 'function') setAccessToken(newAccess);
+            const data = resp && resp.data ? (resp.data as any) : null;
+            const newAccess =
+              data?.access?.token ??
+              data?.tokens?.access?.token ??
+              data?.access_token ??
+              data?.token ??
+              null;
+            if (newAccess && typeof setAccessToken === "function")
+              setAccessToken(newAccess);
           } catch (e) {
             // ignore parsing errors
           }
@@ -135,7 +158,7 @@ export function createAPI(
 
           // Notify caller to clear session state (frontend should clear in-memory user state)
           try {
-            if (typeof onAuthFailure === 'function') onAuthFailure();
+            if (typeof onAuthFailure === "function") onAuthFailure();
           } catch (e) {
             // ignore errors from callback
           }
@@ -145,7 +168,7 @@ export function createAPI(
       }
 
       return Promise.reject(err);
-    }
+    },
   );
 
   // Expose guarded refresh helper for callers (e.g., AuthContext startup restore) to avoid bypassing cooldown/backoff
@@ -163,37 +186,55 @@ if (import.meta.env.DEV) {
   // attach a small helper to window for manual testing
   (window as any).__checkAuthCookie = async () => {
     try {
-      console.debug('[debug] checking cookie-based refresh at', `${API_BASE}/auth/refresh-tokens`);
+      console.debug(
+        "[debug] checking cookie-based refresh at",
+        `${API_BASE}/auth/refresh-tokens`,
+      );
       // try cookie-based refresh (empty body, withCredentials true)
       const resp = await fetch(`${API_BASE}/auth/refresh-tokens`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({}),
       });
 
       if (!resp.ok) {
         if (resp.status === 401) {
-          console.warn('[debug] cookie-refresh failed: 401 Unauthorized — cookie missing or invalid');
+          console.warn(
+            "[debug] cookie-refresh failed: 401 Unauthorized — cookie missing or invalid",
+          );
         } else if (resp.status === 404) {
-          console.warn('[debug] cookie-refresh endpoint not found (404)');
+          console.warn("[debug] cookie-refresh endpoint not found (404)");
         } else {
-          console.warn('[debug] cookie-refresh returned', resp.status, await resp.text());
+          console.warn(
+            "[debug] cookie-refresh returned",
+            resp.status,
+            await resp.text(),
+          );
         }
         return { ok: false, status: resp.status };
       }
 
       const data = await resp.json().catch(() => null);
       // If the server indicates a new access token (or success), report success
-      const hasAccess = !!(data?.access || data?.tokens?.access || data?.access_token || data?.token);
+      const hasAccess = !!(
+        data?.access ||
+        data?.tokens?.access ||
+        data?.access_token ||
+        data?.token
+      );
       if (hasAccess) {
-        console.log('[debug] cookie-refresh succeeded — cookies are working and server returned new tokens');
+        console.log(
+          "[debug] cookie-refresh succeeded — cookies are working and server returned new tokens",
+        );
       } else {
-        console.log('[debug] cookie-refresh succeeded (200) — server did not return token in body; server may be using cookies to rotate refresh token');
+        console.log(
+          "[debug] cookie-refresh succeeded (200) — server did not return token in body; server may be using cookies to rotate refresh token",
+        );
       }
       return { ok: true, status: resp.status, data };
     } catch (err) {
-      console.error('[debug] cookie-refresh request failed', err);
+      console.error("[debug] cookie-refresh request failed", err);
       return { ok: false, error: err };
     }
   };
