@@ -1,0 +1,41 @@
+# Docker Compose for Production Environment
+version: '3.8'
+
+services:
+  sodzo-webclient-prod:
+    build:
+      context: .
+      target: production
+    container_name: sodzo-webclient-prod
+    ports:
+      - "80:80"
+    environment:
+      - NODE_ENV=production
+      - API_BASE_URL=${API_BASE_URL:-https://api-dev.saby.ai}
+      - API_AUTH_ENDPOINT=${API_AUTH_ENDPOINT:-/v1/auth/login}
+      - API_REFRESH_ENDPOINT=${API_REFRESH_ENDPOINT:-/v1/auth/refresh-tokens}
+      - API_LOGOUT_ENDPOINT=${API_LOGOUT_ENDPOINT:-/v1/auth/logout}
+      - API_USER_ENDPOINT=${API_USER_ENDPOINT:-/v1/users}
+      - API_USER_PROFILE_ENDPOINT=${API_USER_PROFILE_ENDPOINT:-/v1/user-profiles}
+      - API_NODE_ENDPOINT=${API_NODE_ENDPOINT:-/v1/node}
+      - API_NODE_PROFILE_ENDPOINT=${API_NODE_PROFILE_ENDPOINT:-/v1/nodeprofile}
+      - API_PROJECT_FORM_ENDPOINT=${API_PROJECT_FORM_ENDPOINT:-/v1/projectForm}
+      - API_STORAGE_ENDPOINT=${API_STORAGE_ENDPOINT:-/v1/storage}
+      - API_INMAIL_ENDPOINT=${API_INMAIL_ENDPOINT:-/v1/inmail}
+      - REFRESH_TOKEN_KEY=${REFRESH_TOKEN_KEY:-saby:refresh_token}
+    networks:
+      - sodzo-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sodzo-webclient.rule=Host(`sodzo-webclient.local`)"
+      - "traefik.http.services.sodzo-webclient.loadbalancer.server.port=80"
+
+networks:
+  sodzo-network:
+    driver: bridge

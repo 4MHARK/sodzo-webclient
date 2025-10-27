@@ -1,0 +1,40 @@
+# Docker Compose for Development Environment
+version: '3.8'
+
+services:
+  sodzo-webclient-dev:
+    build:
+      context: .
+      target: development
+    container_name: sodzo-webclient-dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - VITE_API_BASE=https://api-dev.saby.ai
+      - VITE_API_AUTH_ENDPOINT=/v1/auth/login
+      - VITE_API_REFRESH_ENDPOINT=/v1/auth/refresh-tokens
+      - VITE_API_LOGOUT_ENDPOINT=/v1/auth/logout
+      - VITE_API_USER_ENDPOINT=/v1/users
+      - VITE_API_USER_PROFILE_ENDPOINT=/v1/user-profiles
+      - VITE_API_NODE_ENDPOINT=/v1/node
+      - VITE_API_NODE_PROFILE_ENDPOINT=/v1/nodeprofile
+      - VITE_API_PROJECT_FORM_ENDPOINT=/v1/projectForm
+      - VITE_API_STORAGE_ENDPOINT=/v1/storage
+      - VITE_API_INMAIL_ENDPOINT=/v1/inmail
+      - VITE_REFRESH_TOKEN_KEY=saby:refresh_token
+    networks:
+      - sodzo-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5173"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  sodzo-network:
+    driver: bridge

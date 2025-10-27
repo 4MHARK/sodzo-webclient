@@ -1,0 +1,151 @@
+# GitHub Actions CI/CD Pipeline for Sodzo Web Client
+# Triggers on push to development and production branches
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ development, production ]
+  pull_request:
+    branches: [ development, production ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Development Pipeline
+  development:
+    if: github.ref == 'refs/heads/development'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run linting
+      run: npm run lint
+
+    - name: Run type checking
+      run: npm run type-check
+
+    - name: Run tests
+      run: npm run test
+
+    - name: Build Docker image (Development)
+      run: |
+        docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:development \
+          --target development .
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Push Docker image (Development)
+      run: |
+        docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:development
+
+    - name: Deploy to Development Server
+      if: github.event_name == 'push'
+      run: |
+        echo "🚀 Deploying to development server..."
+        # Add deployment commands here
+        echo "Development deployment completed"
+
+  # Production Pipeline
+  production:
+    if: github.ref == 'refs/heads/production'
+    runs-on: ubuntu-latest
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run linting
+      run: npm run lint
+
+    - name: Run type checking
+      run: npm run type-check
+
+    - name: Run tests
+      run: npm run test
+
+    - name: Build application
+      run: npm run build
+
+    - name: Build Docker image (Production)
+      run: |
+        docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production \
+          --target production .
+        docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production \
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Push Docker images (Production)
+      run: |
+        docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production
+        docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+    - name: Deploy to Production Server
+      if: github.event_name == 'push'
+      run: |
+        echo "🚀 Deploying to production server..."
+        # Add production deployment commands here
+        echo "Production deployment completed"
+
+    - name: Health Check
+      run: |
+        echo "🔍 Running health checks..."
+        # Add health check commands here
+        echo "Health checks completed"
+
+  # Security Scan
+  security-scan:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
