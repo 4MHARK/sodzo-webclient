@@ -6,8 +6,8 @@ import {
   ReactNode,
 } from "react";
 import { dataManager, SyncStatus } from "../utils/dataManager";
-import { apiClient } from "../utils/intelligentAPIClient";
-import { API_ENDPOINTS } from "../utils/api";
+import { createAPIClient } from "../utils/intelligentAPIClient";
+import { API_ENDPOINTS, API_BASE } from "../utils/api";
 import { useAuth } from "./AuthContext";
 
 interface DataContextType {
@@ -85,20 +85,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   const prefetchData = async (endpoint: string, params?: any) => {
-    try {
-      await apiClient.get(endpoint, params, {
-        cache: { ttl: 5 * 60 * 1000 }, // 5 minutes
-      });
-    } catch (error) {
-      console.warn("Prefetch failed:", error);
-    }
+    // Note: Prefetching is now handled by individual providers
+    console.log("Prefetch requested for:", endpoint, params);
   };
 
   const getMetrics = () => {
     return {
       cache: dataManager.getCacheStats(),
       sync: dataManager.getSyncStatus(),
-      api: apiClient.getMetrics(),
       network: {
         isOnline,
         connectionType: (navigator as any).connection?.effectiveType,
@@ -142,10 +136,15 @@ interface UserContextType {
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function IntelligentUserProvider({ children }: { children: ReactNode }) {
-  const { user: authUser, token } = useAuth();
+  const { user: authUser, token, api } = useAuth();
   const [user, setUser] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+
+  // Create API client with main API instance (includes refresh logic)
+  const apiClient = createAPIClient({}, api);
+
+  // Note: Token management is now handled by the main API instance
 
   // Load user data with caching - only when authenticated
   const loadUser = async () => {
@@ -281,10 +280,15 @@ export function IntelligentUserProfileProvider({
 }: {
   children: ReactNode;
 }) {
-  const { user: authUser, token } = useAuth();
+  const { user: authUser, token, api } = useAuth();
   const [userProfile, setUserProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+
+  // Create API client with main API instance (includes refresh logic)
+  const apiClient = createAPIClient({}, api);
+
+  // Note: Token management is now handled by the main API instance
 
   // Load user profile with caching - only when authenticated
   const loadUserProfile = async () => {
@@ -425,15 +429,21 @@ interface NodeContextType {
 const NodeContext = createContext<NodeContextType | undefined>(undefined);
 
 export function IntelligentNodeProvider({ children }: { children: ReactNode }) {
-  const { user: authUser, token } = useAuth();
+  const { user: authUser, token, api } = useAuth();
   const [nodes, setNodes] = useState<any[]>([]);
   const [selectedNode, setSelectedNode] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  // Load nodes with caching - only when authenticated
+  // Create API client with main API instance (includes refresh logic)
+  const apiClient = createAPIClient({}, api);
+
+  // Note: Token management is now handled by the main API instance
+
+  // Load user-specific nodes with caching - only when authenticated
   const loadNodes = async () => {
     if (!authUser || !token) {
+      console.log("🔒 No authentication - skipping node load");
       setNodes([]);
       setSelectedNode(null);
       return;
@@ -443,20 +453,27 @@ export function IntelligentNodeProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       setError(null);
 
-      const nodesData = (await apiClient.get(API_ENDPOINTS.NODE, undefined, {
+      console.log(`🔍 Loading user-specific nodes for user: ${authUser.id}`);
+      const endpoint = `${API_ENDPOINTS.USER}/${authUser.id}/nodes`;
+      console.log(`📡 Fetching from endpoint: ${endpoint}`);
+
+      const nodesData = (await apiClient.get(endpoint, undefined, {
         cache: { ttl: 5 * 60 * 1000 }, // 5 minutes
       })) as any;
 
-      setNodes(nodesData.results || nodesData);
+      console.log("📊 Nodes data received:", nodesData);
+      const nodesArray = nodesData.results || nodesData || [];
+      console.log(`✅ Loaded ${nodesArray.length} nodes for user`);
+
+      setNodes(nodesArray);
 
       // Select first node if none selected
-      if (
-        !selectedNode &&
-        (nodesData.results?.length > 0 || nodesData.length > 0)
-      ) {
-        setSelectedNode(nodesData.results?.[0] || nodesData[0]);
+      if (!selectedNode && nodesArray.length > 0) {
+        console.log("🎯 Selecting first node:", nodesArray[0]);
+        setSelectedNode(nodesArray[0]);
       }
     } catch (err: any) {
+      console.error("❌ Error loading nodes:", err);
       setError(err);
     } finally {
       setLoading(false);
@@ -477,6 +494,9 @@ export function IntelligentNodeProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       setError(null);
 
+      console.log(`🔄 Updating node ${nodeId} with data:`, data);
+      console.log(`📡 PATCH endpoint: ${API_ENDPOINTS.NODE}/${nodeId}`);
+
       // Optimistic update
       const previousNodes = nodes;
       const updatedNodes = nodes.map((node) =>
@@ -486,6 +506,7 @@ export function IntelligentNodeProvider({ children }: { children: ReactNode }) {
 
       // Update selected node if it's the one being updated
       if (selectedNode?.id === nodeId) {
+        console.log("🎯 Updating selected node optimistically");
         setSelectedNode({ ...selectedNode, ...data });
       }
 
@@ -499,6 +520,8 @@ export function IntelligentNodeProvider({ children }: { children: ReactNode }) {
           }
         );
 
+        console.log("✅ Node update successful:", updatedNode);
+
         // Update with server response
         const finalNodes = nodes.map((node) =>
           node.id === nodeId ? updatedNode : node
@@ -509,6 +532,7 @@ export function IntelligentNodeProvider({ children }: { children: ReactNode }) {
           setSelectedNode(updatedNode);
         }
       } catch (err) {
+        console.error("❌ Node update failed, rolling back:", err);
         // Rollback on error
         setNodes(previousNodes);
         if (selectedNode?.id === nodeId) {
@@ -518,6 +542,7 @@ export function IntelligentNodeProvider({ children }: { children: ReactNode }) {
         throw err;
       }
     } catch (err: any) {
+      console.error("❌ Node update error:", err);
       setError(err);
       throw err;
     } finally {
@@ -589,6 +614,177 @@ export function useIntelligentNode() {
   return context;
 }
 
+// Node Profile Context
+interface NodeProfileContextType {
+  nodeProfile: any | null;
+  loading: boolean;
+  error: Error | null;
+  loadNodeProfile: (nodeId: string) => Promise<void>;
+  updateNodeProfile: (nodeId: string, data: any) => Promise<any>;
+  refreshNodeProfile: (nodeId: string) => Promise<void>;
+  invalidateNodeProfile: () => void;
+}
+
+const NodeProfileContext = createContext<NodeProfileContextType | undefined>(
+  undefined
+);
+
+export function IntelligentNodeProfileProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const { user: authUser, token, api } = useAuth();
+  const [nodeProfile, setNodeProfile] = useState<any | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  // Create API client with main API instance (includes refresh logic)
+  const apiClient = createAPIClient({}, api);
+
+  // Note: Token management is now handled by the main API instance
+
+  // Load node profile with caching - only when authenticated
+  const loadNodeProfile = async (nodeId: string) => {
+    if (!authUser || !token || !nodeId) {
+      console.log(
+        "🔒 No authentication or nodeId - skipping node profile load"
+      );
+      setNodeProfile(null);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      console.log(`🔍 Loading node profile for node: ${nodeId}`);
+      const endpoint = `${API_ENDPOINTS.NODE_PROFILE}/node/${nodeId}`;
+      console.log(`📡 Fetching from endpoint: ${endpoint}`);
+
+      const profileData = (await apiClient.get(endpoint, undefined, {
+        cache: { ttl: 5 * 60 * 1000 }, // 5 minutes
+      })) as any;
+
+      console.log("📊 Node profile data received:", profileData);
+      setNodeProfile(profileData);
+    } catch (err: any) {
+      console.error("❌ Error loading node profile:", err);
+      if (err.response?.status === 404) {
+        console.log(
+          "ℹ️ No node profile found for this node - will show empty form"
+        );
+        setNodeProfile(null);
+      } else {
+        setError(err);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Update node profile with optimistic updates
+  const updateNodeProfile = async (nodeId: string, data: any) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      console.log(
+        `🔄 Updating node profile for node ${nodeId} with data:`,
+        data
+      );
+      console.log(`📡 POST endpoint: ${API_ENDPOINTS.NODE_PROFILE}/upsert`);
+
+      // Optimistic update
+      const previousProfile = nodeProfile;
+      setNodeProfile({ ...nodeProfile, ...data });
+
+      try {
+        const updatedProfile = await apiClient.post(
+          `${API_ENDPOINTS.NODE_PROFILE}/upsert`,
+          {
+            ...data,
+            node: nodeId,
+            tenantId: (authUser as any)?.tenantId || "default-tenant",
+          },
+          {
+            optimistic: true,
+            rollbackOnError: true,
+          }
+        );
+
+        console.log("✅ Node profile update successful:", updatedProfile);
+        setNodeProfile(updatedProfile);
+        return updatedProfile;
+      } catch (err) {
+        console.error("❌ Node profile update failed, rolling back:", err);
+        // Rollback on error
+        setNodeProfile(previousProfile);
+        throw err;
+      }
+    } catch (err: any) {
+      console.error("❌ Node profile update error:", err);
+      setError(err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Refresh node profile
+  const refreshNodeProfile = async (nodeId: string) => {
+    await loadNodeProfile(nodeId);
+  };
+
+  // Invalidate node profile cache
+  const invalidateNodeProfile = () => {
+    dataManager.emit("invalidate_endpoint", API_ENDPOINTS.NODE_PROFILE);
+  };
+
+  // Listen for node profile updates from other sources
+  useEffect(() => {
+    const handleNodeProfileUpdate = (event: { data: any }) => {
+      if (event.data) {
+        console.log(
+          "🔄 Node profile updated from external source:",
+          event.data
+        );
+        setNodeProfile(event.data);
+      }
+    };
+
+    dataManager.on("node_profile_updated", handleNodeProfileUpdate);
+    return () =>
+      dataManager.off("node_profile_updated", handleNodeProfileUpdate);
+  }, []);
+
+  const value: NodeProfileContextType = {
+    nodeProfile,
+    loading,
+    error,
+    loadNodeProfile,
+    updateNodeProfile,
+    refreshNodeProfile,
+    invalidateNodeProfile,
+  };
+
+  return (
+    <NodeProfileContext.Provider value={value}>
+      {children}
+    </NodeProfileContext.Provider>
+  );
+}
+
+export function useIntelligentNodeProfile() {
+  const context = useContext(NodeProfileContext);
+  if (context === undefined) {
+    throw new Error(
+      "useIntelligentNodeProfile must be used within an IntelligentNodeProfileProvider"
+    );
+  }
+  return context;
+}
+
 // Project Form Context
 interface ProjectFormContextType {
   projectForms: any[];
@@ -612,7 +808,7 @@ export function IntelligentProjectFormProvider({
 }: {
   children: ReactNode;
 }) {
-  const { user: authUser, token } = useAuth();
+  const { user: authUser, token, api } = useAuth();
   const [projectForms, setProjectForms] = useState<any[]>([]);
   const [selectedProjectForm, setSelectedProjectForm] = useState<any | null>(
     null
@@ -620,9 +816,13 @@ export function IntelligentProjectFormProvider({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
+  // Create API client with main API instance (includes refresh logic)
+  const apiClient = createAPIClient({}, api);
+
   // Load project forms with caching - only when authenticated
   const loadProjectForms = async () => {
     if (!authUser || !token) {
+      console.log("🔒 No authentication - skipping project forms load");
       setProjectForms([]);
       setSelectedProjectForm(null);
       return;
@@ -632,26 +832,41 @@ export function IntelligentProjectFormProvider({
       setLoading(true);
       setError(null);
 
-      const projectFormsData = (await apiClient.get(
-        API_ENDPOINTS.PROJECT_FORM,
-        undefined,
-        {
-          cache: { ttl: 5 * 60 * 1000 }, // 5 minutes
-        }
-      )) as any;
+      console.log("🔍 Loading project forms...");
+      console.log("👤 Auth user:", authUser);
+      console.log("🏢 Tenant ID:", authUser.tenantId);
 
-      setProjectForms(projectFormsData.results || projectFormsData);
+      if (!authUser.tenantId) {
+        console.error("❌ No tenant ID found in auth user");
+        setError(new Error("No tenant ID found in user data"));
+        return;
+      }
+
+      const endpoint = `${API_ENDPOINTS.PROJECT_FORM}/tenant/${authUser.tenantId}`;
+      console.log(`📡 Fetching from endpoint: ${endpoint}`);
+      console.log(`🌐 Full URL: ${API_BASE}${endpoint}`);
+
+      const projectFormsData = (await apiClient.get(endpoint, undefined, {
+        cache: { ttl: 5 * 60 * 1000 }, // 5 minutes
+      })) as any;
+
+      console.log("📊 Project forms data received:", projectFormsData);
+      const formsArray = projectFormsData.results || projectFormsData || [];
+      console.log(`✅ Loaded ${formsArray.length} project forms`);
+
+      setProjectForms(formsArray);
 
       // Select first project form if none selected
-      if (
-        !selectedProjectForm &&
-        (projectFormsData.results?.length > 0 || projectFormsData.length > 0)
-      ) {
-        setSelectedProjectForm(
-          projectFormsData.results?.[0] || projectFormsData[0]
-        );
+      if (!selectedProjectForm && formsArray.length > 0) {
+        setSelectedProjectForm(formsArray[0]);
       }
     } catch (err: any) {
+      console.error("❌ Error loading project forms:", err);
+      console.error(
+        "❌ Error details:",
+        err.response?.status,
+        err.response?.data
+      );
       setError(err);
     } finally {
       setLoading(false);
@@ -860,11 +1075,14 @@ export function IntelligentStorageProvider({
 }: {
   children: ReactNode;
 }) {
-  const { user: authUser, token } = useAuth();
+  const { user: authUser, token, api } = useAuth();
   const [files, setFiles] = useState<any[]>([]);
   const [stats, setStats] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+
+  // Create API client with main API instance (includes refresh logic)
+  const apiClient = createAPIClient({}, api);
 
   // Load storage stats with caching - only when authenticated
   const loadStats = async () => {
@@ -1030,11 +1248,14 @@ export function IntelligentInmailProvider({
 }: {
   children: ReactNode;
 }) {
-  const { user: authUser, token } = useAuth();
+  const { user: authUser, token, api } = useAuth();
   const [messages, setMessages] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+
+  // Create API client with main API instance (includes refresh logic)
+  const apiClient = createAPIClient({}, api);
 
   // Load messages with caching - only when authenticated
   const loadMessages = async () => {

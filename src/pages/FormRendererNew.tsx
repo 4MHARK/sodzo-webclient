@@ -49,7 +49,7 @@ export default function FormRenderer() {
   const navigate = useNavigate();
   const { user: authUser, token } = useAuth();
   const { projectForms, loading, error } = useIntelligentProjectForm();
-
+  
   const [formData, setFormData] = useState<any | null>(null);
   const [formValues, setFormValues] = useState<Record<string, any>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -68,53 +68,19 @@ export default function FormRenderer() {
 
     // Find the project form by projectId
     if (formId && projectForms.length > 0) {
-      const projectForm = projectForms.find((pf) => pf.projectId === formId);
+      const projectForm = projectForms.find(pf => pf.projectId === formId);
       if (projectForm) {
         console.log("📋 Found project form:", projectForm);
-        console.log("📊 Project form columnSpans:", projectForm.columnSpans);
-        console.log(
-          "🧮 Form elements with formulas:",
-          projectForm.elements
-            ?.filter((el: any) => el.properties?.numberType === "calculated")
-            .map((el: any) => ({
-              id: el.id,
-              label: el.properties?.label,
-              formula: el.properties?.formula,
-            }))
-        );
-
-        // Specifically check for Total Remittance field
-        const totalRemittanceField = projectForm.elements?.find(
-          (el: any) =>
-            el.id.includes("remittance") ||
-            el.properties?.label?.toLowerCase().includes("remittance")
-        );
-        console.log("💰 Total Remittance field:", totalRemittanceField);
-
-        // Check all elements to see field IDs
-        console.log(
-          "📝 All form elements:",
-          projectForm.elements?.map((el: any) => ({
-            id: el.id,
-            label: el.properties?.label,
-            type: el.type,
-            numberType: el.properties?.numberType,
-            formula: el.properties?.formula,
-          }))
-        );
         setFormData(projectForm);
-
+        
         // Initialize form values
         const initialValues: Record<string, any> = {};
         projectForm.elements?.forEach((element: any) => {
-          if (element.type !== "header") {
-            initialValues[element.id] = element.properties?.defaultValue || "";
+          if (element.type !== 'header') {
+            initialValues[element.id] = element.properties?.defaultValue || '';
           }
         });
-
-        // Calculate initial values for calculated fields
-        const calculatedValues = calculateDependentFields("", initialValues);
-        setFormValues(calculatedValues);
+        setFormValues(initialValues);
       } else {
         console.log("❌ Project form not found for projectId:", formId);
         toast.error("Form not found");
@@ -131,101 +97,12 @@ export default function FormRenderer() {
     }
   }, [formId, projectForms, navigate, isAuthenticated]);
 
-  // Calculate dependent fields based on formulas
-  const calculateDependentFields = (
-    _changedFieldId: string,
-    currentValues: Record<string, any>
-  ) => {
-    if (!formData?.elements) return currentValues;
-
-    const updatedValues = { ...currentValues };
-    let hasChanges = true;
-
-    // Keep recalculating until no more changes (for chained dependencies)
-    while (hasChanges) {
-      hasChanges = false;
-
-      formData.elements.forEach((element: any) => {
-        if (
-          element.properties?.numberType === "calculated" &&
-          element.properties?.formula
-        ) {
-          const formula = element.properties.formula;
-          const fieldId = element.id;
-
-          try {
-            const calculatedValue = evaluateFormula(formula, updatedValues);
-            console.log(
-              `🧮 Calculating ${fieldId}: "${formula}" = ${calculatedValue}`
-            );
-            console.log(
-              `📊 Current values:`,
-              Object.keys(updatedValues).reduce((acc, key) => {
-                acc[key] = updatedValues[key];
-                return acc;
-              }, {} as any)
-            );
-            if (updatedValues[fieldId] !== calculatedValue) {
-              updatedValues[fieldId] = calculatedValue;
-              hasChanges = true;
-            }
-          } catch (error) {
-            console.warn(`Error calculating field ${fieldId}:`, error);
-          }
-        }
-      });
-    }
-
-    return updatedValues;
-  };
-
-  // Evaluate formula string with field values
-  const evaluateFormula = (formula: string, values: Record<string, any>) => {
-    console.log(`🔍 Evaluating formula: "${formula}"`);
-    console.log(`📊 Available values:`, values);
-
-    // Replace field IDs with their values
-    let expression = formula;
-
-    // Find all field IDs in the formula and replace with values
-    const fieldIds = Object.keys(values);
-    fieldIds.forEach((fieldId) => {
-      const regex = new RegExp(`\\b${fieldId}\\b`, "g");
-      const fieldValue = parseFloat(values[fieldId]) || 0;
-      expression = expression.replace(regex, fieldValue.toString());
-      console.log(
-        `🔄 Replaced ${fieldId} with ${fieldValue} in expression: "${expression}"`
-      );
-    });
-
-    // Evaluate the mathematical expression safely
-    try {
-      // Clean the expression to only allow numbers, operators, and parentheses
-      const cleanExpression = expression.replace(/[^0-9+\-*/.() ]/g, "");
-      console.log(`🧹 Cleaned expression: "${cleanExpression}"`);
-
-      // Use Function constructor instead of eval for better security
-      const result = new Function("return " + cleanExpression)();
-      console.log(`✅ Formula result: ${result}`);
-      return isNaN(result) ? 0 : result;
-    } catch (error) {
-      console.warn(`Error evaluating formula "${formula}":`, error);
-      return 0;
-    }
-  };
-
   const handleInputChange = (fieldId: string, value: any) => {
-    setFormValues((prev) => {
-      const newValues = {
-        ...prev,
-        [fieldId]: value,
-      };
-
-      // Calculate dependent fields after updating the value
-      const updatedValues = calculateDependentFields(fieldId, newValues);
-      return updatedValues;
-    });
-
+    setFormValues((prev) => ({
+      ...prev,
+      [fieldId]: value,
+    }));
+    
     // Clear error when user starts typing
     if (errors[fieldId]) {
       setErrors((prev) => ({
@@ -237,16 +114,13 @@ export default function FormRenderer() {
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
-
+    
     if (formData?.elements) {
       // Real project form validation
       formData.elements.forEach((element: any) => {
-        if (
-          element.type !== "header" &&
-          element.properties?.validation?.required
-        ) {
+        if (element.type !== 'header' && element.properties?.validation?.required) {
           const value = formValues[element.id];
-          if (!value || (typeof value === "string" && value.trim() === "")) {
+          if (!value || (typeof value === 'string' && value.trim() === '')) {
             newErrors[element.id] = `${element.properties.label} is required`;
           }
         }
@@ -256,31 +130,31 @@ export default function FormRenderer() {
       formData.fields.forEach((field: any) => {
         if (field.required) {
           const value = formValues[field.id];
-          if (!value || (typeof value === "string" && value.trim() === "")) {
+          if (!value || (typeof value === 'string' && value.trim() === '')) {
             newErrors[field.id] = `${field.label} is required`;
           }
         }
       });
     }
-
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     if (!validateForm()) {
       toast.error("Please fill in all required fields");
       return;
     }
 
     setIsSubmitting(true);
-
+    
     try {
       // Simulate form submission
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
       console.log("📝 Form submitted:", formValues);
       toast.success("Form submitted successfully!");
       setIsSubmitted(true);
@@ -297,146 +171,111 @@ export default function FormRenderer() {
     toast.success("Draft saved successfully!");
   };
 
-  // Render field based on real project form data structure with column spans
+  // Render field based on real project form data structure
   const renderRealField = (element: any) => {
     const { id, type, properties } = element;
-    const value = formValues[id] || "";
+    const value = formValues[id] || '';
     const isRequired = properties?.validation?.required || false;
-    const placeholder = properties?.placeholder || "";
+    const placeholder = properties?.placeholder || '';
     const options = properties?.options || [];
-    // Column span is now handled by the parent motion.div wrapper
 
-    const fieldElement = (() => {
-      switch (type) {
-        case "header":
-          return (
-            <div className="text-center py-6">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                {properties?.label || "Form Header"}
-              </h2>
-            </div>
-          );
-
-        case "text":
-          return (
-            <input
-              type="text"
-              id={id}
-              value={value}
-              onChange={(e) => handleInputChange(id, e.target.value)}
-              placeholder={placeholder}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-              required={isRequired}
-            />
-          );
-
-        case "email":
-          return (
-            <input
-              type="email"
-              id={id}
-              value={value}
-              onChange={(e) => handleInputChange(id, e.target.value)}
-              placeholder={placeholder}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-              required={isRequired}
-            />
-          );
-
-        case "number":
-          return (
-            <input
-              type="number"
-              id={id}
-              value={value}
-              onChange={(e) => handleInputChange(id, e.target.value)}
-              placeholder={placeholder}
-              className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white ${
-                properties?.numberType === "calculated"
-                  ? "bg-gray-100 dark:bg-gray-600 cursor-not-allowed"
-                  : ""
-              }`}
-              required={isRequired}
-              readOnly={properties?.numberType === "calculated"}
-              title={
-                properties?.numberType === "calculated"
-                  ? `Calculated: ${properties?.formula}`
-                  : ""
-              }
-            />
-          );
-
-        case "datepicker":
-          return (
-            <input
-              type="date"
-              id={id}
-              value={value}
-              onChange={(e) => handleInputChange(id, e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-              required={isRequired}
-            />
-          );
-
-        case "dropdown":
-          return (
-            <select
-              id={id}
-              value={value}
-              onChange={(e) => handleInputChange(id, e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-              required={isRequired}>
-              <option value="">Select an option</option>
-              {options.map((option: string) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          );
-
-        default:
-          return (
-            <input
-              type="text"
-              id={id}
-              value={value}
-              onChange={(e) => handleInputChange(id, e.target.value)}
-              placeholder={placeholder}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-              required={isRequired}
-            />
-          );
-      }
-    })();
-
-    return (
-      <div className="space-y-2">
-        {type !== "header" && (
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            {properties?.label}
-            {properties?.numberType === "calculated" && (
-              <span className="ml-2 text-xs text-blue-600 dark:text-blue-400 font-normal">
-                (calculated)
-              </span>
-            )}
-            {isRequired && <span className="text-red-500 ml-1">*</span>}
-          </label>
-        )}
-        {fieldElement}
-        {errors[id] && (
-          <div className="flex items-center text-red-500 text-sm">
-            <AlertCircle className="w-4 h-4 mr-1" />
-            {errors[id]}
+    switch (type) {
+      case 'header':
+        return (
+          <div className="text-center py-6">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+              {properties?.label || 'Form Header'}
+            </h2>
           </div>
-        )}
-      </div>
-    );
+        );
+
+      case 'text':
+        return (
+          <input
+            type="text"
+            id={id}
+            value={value}
+            onChange={(e) => handleInputChange(id, e.target.value)}
+            placeholder={placeholder}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+            required={isRequired}
+          />
+        );
+
+      case 'email':
+        return (
+          <input
+            type="email"
+            id={id}
+            value={value}
+            onChange={(e) => handleInputChange(id, e.target.value)}
+            placeholder={placeholder}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+            required={isRequired}
+          />
+        );
+
+      case 'number':
+        return (
+          <input
+            type="number"
+            id={id}
+            value={value}
+            onChange={(e) => handleInputChange(id, e.target.value)}
+            placeholder={placeholder}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+            required={isRequired}
+            readOnly={properties?.numberType === 'calculated'}
+          />
+        );
+
+      case 'datepicker':
+        return (
+          <input
+            type="date"
+            id={id}
+            value={value}
+            onChange={(e) => handleInputChange(id, e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+            required={isRequired}
+          />
+        );
+
+      case 'dropdown':
+        return (
+          <select
+            id={id}
+            value={value}
+            onChange={(e) => handleInputChange(id, e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+            required={isRequired}>
+            <option value="">Select an option</option>
+            {options.map((option: string) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        );
+
+      default:
+        return (
+          <input
+            type="text"
+            id={id}
+            value={value}
+            onChange={(e) => handleInputChange(id, e.target.value)}
+            placeholder={placeholder}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+            required={isRequired}
+          />
+        );
+    }
   };
 
   // Render field for mock data
   const renderMockField = (field: any) => {
-    const value = formValues[field.id] || "";
+    const value = formValues[field.id] || '';
     const error = errors[field.id];
 
     switch (field.type) {
@@ -538,8 +377,7 @@ export default function FormRenderer() {
             Form Submitted Successfully!
           </h2>
           <p className="text-gray-600 dark:text-gray-400 mb-6">
-            Thank you for your submission. We'll review your information and get
-            back to you soon.
+            Thank you for your submission. We'll review your information and get back to you soon.
           </p>
           <div className="space-x-4">
             <button
@@ -576,14 +414,10 @@ export default function FormRenderer() {
               </button>
               <div>
                 <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  {formData?.configuration?.projectName ||
-                    formData?.name ||
-                    "Form"}
+                  {formData?.configuration?.projectName || formData?.name || "Form"}
                 </h1>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {formData?.configuration?.tags?.join(", ") ||
-                    formData?.description ||
-                    "Fill out the form below"}
+                  {formData?.configuration?.tags?.join(", ") || formData?.description || "Fill out the form below"}
                 </p>
               </div>
             </div>
@@ -607,60 +441,34 @@ export default function FormRenderer() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}>
+          
           {/* Render fields based on data type */}
           {formData?.elements ? (
-            // Real project form fields with CSS Grid layout
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {formData.elements.map((element: any, index: number) => {
-                const { id, type } = element;
-                const columnSpan = formData?.columnSpans?.[id] || 4;
-
-                // Debug logging for first few fields
-                if (index < 5) {
-                  console.log(
-                    `🔍 Field ${id}: columnSpan = ${columnSpan}, type = ${type}`
-                  );
-                }
-
-                // Calculate CSS grid column span
-                const getGridColumns = (span: number) => {
-                  switch (span) {
-                    case 1:
-                      return 1;
-                    case 2:
-                      return 2;
-                    case 3:
-                      return 3;
-                    case 4:
-                      return 4;
-                    default:
-                      return 4;
-                  }
-                };
-
-                const actualColumns = getGridColumns(columnSpan);
-                const gridColSpan =
-                  type === "header"
-                    ? "col-span-4"
-                    : `col-span-${actualColumns}`;
-
-                // Debug logging for CSS classes
-                if (index < 5) {
-                  console.log(`🎨 Field ${id}: gridColSpan = ${gridColSpan}`);
-                }
-
-                return (
-                  <motion.div
-                    key={element.id}
-                    className={gridColSpan}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.1 * index }}>
-                    {renderRealField(element)}
-                  </motion.div>
-                );
-              })}
-            </div>
+            // Real project form fields
+            formData.elements.map((element: any, index: number) => (
+              <motion.div
+                key={element.id}
+                className="space-y-2"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1 * index }}>
+                {element.type !== 'header' && (
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {element.properties?.label}
+                    {element.properties?.validation?.required && (
+                      <span className="text-red-500 ml-1">*</span>
+                    )}
+                  </label>
+                )}
+                {renderRealField(element)}
+                {errors[element.id] && (
+                  <div className="flex items-center text-red-500 text-sm">
+                    <AlertCircle className="w-4 h-4 mr-1" />
+                    {errors[element.id]}
+                  </div>
+                )}
+              </motion.div>
+            ))
           ) : (
             // Mock form fields
             formData?.fields?.map((field: any, index: number) => (
@@ -672,9 +480,7 @@ export default function FormRenderer() {
                 transition={{ delay: 0.1 * index }}>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   {field.label}
-                  {field.required && (
-                    <span className="text-red-500 ml-1">*</span>
-                  )}
+                  {field.required && <span className="text-red-500 ml-1">*</span>}
                 </label>
                 {renderMockField(field)}
                 {errors[field.id] && (

@@ -31,7 +31,7 @@ export const API_ENDPOINTS = {
 
   // Project Form endpoints
   PROJECT_FORM:
-    import.meta.env.VITE_API_PROJECT_FORM_ENDPOINT || "/projectForm",
+    import.meta.env.VITE_API_PROJECT_FORM_ENDPOINT || "/project-forms",
 
   // Storage endpoints
   STORAGE: import.meta.env.VITE_API_STORAGE_ENDPOINT || "/storage",
@@ -109,11 +109,23 @@ export function createAPI(
         typeof localStorage !== "undefined"
           ? localStorage.getItem(LOCAL_REFRESH_KEY)
           : null;
+
+      console.log(
+        "🔄 Refresh attempt - In-memory token:",
+        refreshToken ? `${refreshToken.substring(0, 20)}...` : "null"
+      );
+      console.log(
+        "🔄 Refresh attempt - Legacy token:",
+        legacy ? `${legacy.substring(0, 20)}...` : "null"
+      );
+
       const body = refreshToken
         ? { refreshToken }
         : legacy
         ? { refreshToken: legacy }
         : {};
+
+      console.log("🔄 Refresh request body:", body);
       const resp = await axios.post(
         `${API_BASE}${API_ENDPOINTS.REFRESH}`,
         body,

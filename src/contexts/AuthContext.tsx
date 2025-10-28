@@ -9,6 +9,7 @@ export interface User {
   email: string;
   name?: string;
   avatarUrl?: string;
+  tenantId?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -145,10 +146,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const userResp: User | undefined = data.user ?? data ?? null;
 
       // Backend may return a non-HttpOnly access token in the body (optional). Keep it in memory if provided.
-  const accessToken = data?.access?.token ?? data?.tokens?.access?.token ?? data?.access_token ?? data?.token ?? null;
-  const newRefresh = data?.refresh?.token ?? data?.tokens?.refresh?.token ?? data?.refresh_token ?? data?.refreshToken ?? null;
-  if (accessToken) setTokenStateSafe(accessToken);
-  if (newRefresh) refreshTokenRef.current = newRefresh;
+      const accessToken =
+        data?.access?.token ??
+        data?.tokens?.access?.token ??
+        data?.access_token ??
+        data?.token ??
+        null;
+      const newRefresh =
+        data?.refresh?.token ??
+        data?.tokens?.refresh?.token ??
+        data?.refresh_token ??
+        data?.refreshToken ??
+        null;
+      
+      console.log(
+        "🔑 Login response - Access token:",
+        accessToken ? `${accessToken.substring(0, 20)}...` : "null"
+      );
+      console.log(
+        "🔑 Login response - Refresh token:",
+        newRefresh ? `${newRefresh.substring(0, 20)}...` : "null"
+      );
+      
+      if (accessToken) setTokenStateSafe(accessToken);
+      if (newRefresh) {
+        refreshTokenRef.current = newRefresh;
+        console.log("💾 Refresh token stored in memory");
+      }
 
       setUser(userResp ?? null);
       return userResp ?? ({} as User);

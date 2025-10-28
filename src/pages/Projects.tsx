@@ -201,21 +201,22 @@ export default function Projects() {
   const transformedProjects = projectForms.map((projectForm) => ({
     id: projectForm.id,
     name: projectForm.configuration?.projectName || "Untitled Project",
-    description:
-      projectForm.configuration?.description || "No description available",
+    description: `A ${
+      projectForm.configuration?.tags?.join(", ") || "general"
+    } form with ${projectForm.elements?.length || 0} fields`,
     icon: getIconForProject(projectForm.configuration?.tags?.[0] || "default"),
     color: "bg-blue-500", // Default color
     category: projectForm.configuration?.tags?.[0] || "General",
     fields: projectForm.elements?.length || 0,
     submissions: projectForm.analytics?.submissions || 0,
-    lastUsed: projectForm.updatedAt
-      ? new Date(projectForm.updatedAt).toISOString().split("T")[0]
+    lastUsed: projectForm.publishedAt
+      ? new Date(projectForm.publishedAt).toISOString().split("T")[0]
       : "Never",
     projectId: projectForm.projectId,
   }));
 
-  // Combine real projects with mock templates for demonstration
-  const allProjects = isAuthenticated ? transformedProjects : projectTemplates;
+  // Use only real project forms from backend
+  const allProjects = transformedProjects;
 
   // Filter projects based on search and category
   const filteredProjects = allProjects.filter((project) => {
@@ -267,21 +268,38 @@ export default function Projects() {
 
   // Show error state
   if (error && isAuthenticated) {
+    const isBackendNotImplemented = error.message?.includes(
+      "not yet implemented"
+    );
+
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+        <div className="text-center max-w-md">
+          <div className="text-blue-500 text-6xl mb-4">🚧</div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            Failed to Load Projects
+            {isBackendNotImplemented
+              ? "Project Forms Coming Soon"
+              : "Failed to Load Projects"}
           </h3>
           <p className="text-gray-600 dark:text-gray-400 mb-4">
-            {error.message || "Unable to fetch project forms"}
+            {isBackendNotImplemented
+              ? "The project forms backend endpoint is not yet implemented. This feature will be available soon!"
+              : error.message || "Unable to fetch project forms"}
           </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-            Retry
-          </button>
+          {isBackendNotImplemented ? (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                <strong>Demo Mode:</strong> You can still explore the mock
+                project templates below to see how the feature will work.
+              </p>
+            </div>
+          ) : (
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+              Retry
+            </button>
+          )}
         </div>
       </div>
     );

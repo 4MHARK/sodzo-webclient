@@ -16,17 +16,28 @@ import {
   CheckCircle,
   AlertCircle,
   Upload,
-  Download,
-  Eye,
-  EyeOff,
 } from "lucide-react";
-import { useIntelligentNode } from "../contexts/IntelligentContexts";
-import { useData } from "../hooks/useData";
+import {
+  useIntelligentNode,
+  useIntelligentNodeProfile,
+} from "../contexts/IntelligentContexts";
 import toast from "react-hot-toast";
 
 export default function NodeProfileClean() {
-  const { nodes, selectedNode, loading, error, updateNode } =
-    useIntelligentNode();
+  const {
+    nodes,
+    selectedNode,
+    loading: nodesLoading,
+    error: nodesError,
+    updateNode,
+  } = useIntelligentNode();
+  const {
+    nodeProfile,
+    loading: profileLoading,
+    error: profileError,
+    loadNodeProfile,
+    updateNodeProfile,
+  } = useIntelligentNodeProfile();
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -82,12 +93,23 @@ export default function NodeProfileClean() {
     tenantId: "",
   });
 
-  // Update form data when selected node changes
+  // Update form data when selected node changes and load node profile
   useEffect(() => {
+    console.log("🔄 NodeProfileClean: selectedNode changed:", selectedNode);
+    console.log("📊 NodeProfileClean: nodes data:", nodes);
+    console.log("📊 NodeProfileClean: nodeProfile data:", nodeProfile);
+
     if (selectedNode) {
+      console.log("🎯 Mapping node to form data:", selectedNode);
       setFormData(mapNodeToForm(selectedNode));
+
+      // Load node profile for the selected node
+      if (selectedNode.id) {
+        console.log(`🔍 Loading node profile for node: ${selectedNode.id}`);
+        loadNodeProfile(selectedNode.id);
+      }
     }
-  }, [selectedNode]);
+  }, [selectedNode, nodes, nodeProfile, loadNodeProfile]);
 
   const mapNodeToForm = (node: any) => ({
     name: node.structure?.name || "",
@@ -140,20 +162,60 @@ export default function NodeProfileClean() {
   const handleSave = async () => {
     if (!selectedNode) return;
 
+    console.log("💾 Saving node profile data:", formData);
+    console.log("🎯 Selected node:", selectedNode);
+
     setSaving(true);
     try {
-      await updateNode(selectedNode.id, formData);
+      // Update the node basic information
+      console.log("🔄 Updating node basic information...");
+      await updateNode(selectedNode.id, {
+        name: formData.name,
+        description: formData.description,
+        address: formData.address,
+        city: formData.city,
+        state: formData.state,
+        country: formData.country,
+      });
+
+      // Update the node profile with detailed information
+      console.log("🔄 Updating node profile detailed information...");
+      await updateNodeProfile(selectedNode.id, {
+        phone: formData.phone,
+        email: formData.email,
+        website: formData.website,
+        socialMedia: formData.socialMedia,
+        zipCode: formData.zipCode,
+        establishedDate: formData.establishedDate,
+        registrationNumber: formData.registrationNumber,
+        propertyOwnership: formData.propertyOwnership,
+        propertySize: formData.propertySize,
+        propertyValue: formData.propertyValue,
+        mortgageStatus: formData.mortgageStatus,
+        taxExemptStatus: formData.taxExemptStatus,
+        denomination: formData.denomination,
+        churchType: formData.churchType,
+        membershipCount: formData.membershipCount,
+        staffCount: formData.staffCount,
+        serviceTimes: formData.serviceTimes,
+        programs: formData.programs,
+        annualBudget: formData.annualBudget,
+        fundingSources: formData.fundingSources,
+        donations: formData.donations,
+      });
+
+      console.log("✅ Node profile saved successfully!");
       toast.success("Church profile updated successfully!");
       setIsEditing(false);
     } catch (err) {
-      console.error("Error saving changes:", err);
+      console.error("❌ Error saving node profile:", err);
       toast.error("Failed to save changes");
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) {
+  if (nodesLoading || profileLoading) {
     return (
       <div className="flex justify-center items-center h-64 text-gray-500">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -162,14 +224,16 @@ export default function NodeProfileClean() {
     );
   }
 
-  if (error) {
+  if (nodesError || profileError) {
     return (
       <div className="text-center text-red-500 mt-10">
         <AlertCircle className="w-16 h-16 mx-auto text-red-300 mb-4" />
         <p className="text-xl font-semibold">
           Failed to load church information
         </p>
-        <p className="text-gray-400">{error.message}</p>
+        <p className="text-gray-400">
+          {nodesError?.message || profileError?.message}
+        </p>
       </div>
     );
   }
@@ -242,11 +306,11 @@ export default function NodeProfileClean() {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               Church Name
             </label>
-              <input
-                type="text"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
+            <input
+              type="text"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
               disabled={!isEditing}
               className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
             />
@@ -305,9 +369,9 @@ export default function NodeProfileClean() {
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
             Description
           </label>
-              <textarea
-                name="description"
-                value={formData.description}
+          <textarea
+            name="description"
+            value={formData.description}
             onChange={handleChange}
             disabled={!isEditing}
             rows={4}
@@ -409,15 +473,15 @@ export default function NodeProfileClean() {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               Street Address
             </label>
-              <input
-                type="text"
-                name="address"
-                value={formData.address}
-                onChange={handleChange}
+            <input
+              type="text"
+              name="address"
+              value={formData.address}
+              onChange={handleChange}
               disabled={!isEditing}
               placeholder="Enter street address"
               className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-              />
+            />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -434,7 +498,7 @@ export default function NodeProfileClean() {
                 placeholder="City"
                 className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
               />
-          </div>
+            </div>
 
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -464,7 +528,7 @@ export default function NodeProfileClean() {
                 placeholder="ZIP Code"
                 className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
               />
-          </div>
+            </div>
 
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -581,7 +645,7 @@ export default function NodeProfileClean() {
                 htmlFor="registration-cert"
                 className="cursor-pointer text-blue-600 hover:text-blue-700 font-medium">
                 {formData.registrationCertificate
-                  ? formData.registrationCertificate.name
+                  ? (formData.registrationCertificate as File).name
                   : "Upload Registration Certificate"}
               </label>
               <input
@@ -630,7 +694,7 @@ export default function NodeProfileClean() {
                 htmlFor="insurance-policy"
                 className="cursor-pointer text-blue-600 hover:text-blue-700 font-medium">
                 {formData.insurancePolicy
-                  ? formData.insurancePolicy.name
+                  ? (formData.insurancePolicy as File).name
                   : "Upload Insurance Policy"}
               </label>
               <input
@@ -662,7 +726,7 @@ export default function NodeProfileClean() {
                 htmlFor="property-deed"
                 className="cursor-pointer text-blue-600 hover:text-blue-700 font-medium">
                 {formData.propertyDeed
-                  ? formData.propertyDeed.name
+                  ? (formData.propertyDeed as File).name
                   : "Upload Property Deed"}
               </label>
               <input

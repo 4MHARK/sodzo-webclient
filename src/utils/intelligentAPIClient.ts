@@ -1,6 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from "axios";
 import { dataManager, DataOperation } from "./dataManager";
-import { getMockData, isMockMode } from "./mockDataFallback";
 
 export interface APIClientConfig {
   baseURL: string;
@@ -9,6 +8,7 @@ export interface APIClientConfig {
   enableOfflineMode: boolean;
   retryAttempts: number;
   retryDelay: number;
+  useMainAPI?: boolean; // Flag to indicate if using main API instance
 }
 
 export interface CacheConfig {
@@ -27,27 +27,60 @@ export class IntelligentAPIClient {
   private axiosInstance: AxiosInstance;
   private config: APIClientConfig;
   private requestQueue: Map<string, Promise<any>> = new Map();
+  private authToken: string | null = null;
 
-  constructor(config: APIClientConfig) {
+  constructor(config: APIClientConfig, apiInstance?: AxiosInstance) {
     this.config = config;
-    this.axiosInstance = axios.create({
-      baseURL: config.baseURL,
-      timeout: config.timeout,
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
+
+    // Use provided API instance (with refresh logic) or create a basic one
+    if (apiInstance) {
+      this.axiosInstance = apiInstance;
+      this.config.useMainAPI = true; // Mark that we're using the main API instance
+    } else {
+      this.axiosInstance = axios.create({
+        baseURL: config.baseURL,
+        timeout: config.timeout,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      this.config.useMainAPI = false; // Mark that we're using our own instance
+    }
 
     this.setupInterceptors();
     this.setupDataManagerIntegration();
   }
 
+  // Method to set the authentication token
+  setAuthToken(token: string | null) {
+    this.authToken = token;
+    console.log(
+      "🔑 API Client token updated:",
+      token ? `${token.substring(0, 20)}...` : "null"
+    );
+  }
+
   private setupInterceptors() {
-    // Request interceptor
+    // Request interceptor - only add monitoring, not auth tokens
+    // Auth tokens are handled by the main API instance when provided
     this.axiosInstance.interceptors.request.use(
       (config) => {
         // Add request timestamp for monitoring
         (config as any).requestStartTime = Date.now();
+
+        // Only log if we're not using the main API instance (which handles auth automatically)
+        if (!this.config.useMainAPI) {
+          if (this.authToken) {
+            config.headers.Authorization = `Bearer ${this.authToken}`;
+            console.log(
+              "🔐 Adding authorization header to request:",
+              config.url
+            );
+          } else {
+            console.log("⚠️ No auth token available for request:", config.url);
+          }
+        }
+
         return config;
       },
       (error) => Promise.reject(error)
@@ -262,8 +295,6 @@ export class IntelligentAPIClient {
 
   // Invalidate cache for specific endpoint
   private invalidateCacheForEndpoint(endpoint: string): void {
-    const keysToDelete: string[] = [];
-
     // This would need to be implemented based on your cache structure
     // For now, we'll emit an event that can be handled by the data manager
     dataManager.emit("invalidate_endpoint", endpoint);
@@ -307,7 +338,8 @@ export class IntelligentAPIClient {
 
 // Factory function to create API client instances
 export function createAPIClient(
-  config: Partial<APIClientConfig> = {}
+  config: Partial<APIClientConfig> = {},
+  apiInstance?: AxiosInstance
 ): IntelligentAPIClient {
   const defaultConfig: APIClientConfig = {
     baseURL: import.meta.env.VITE_API_BASE || "/v1",
@@ -319,7 +351,7 @@ export function createAPIClient(
     ...config,
   };
 
-  return new IntelligentAPIClient(defaultConfig);
+  return new IntelligentAPIClient(defaultConfig, apiInstance);
 }
 
 // Default API client instance
