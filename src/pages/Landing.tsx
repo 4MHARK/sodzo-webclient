@@ -5,8 +5,10 @@ import {
   useTransform,
   AnimatePresence,
 } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import AuthModal from "../components/AuthModal";
 import { getRandomUserAvatar } from "../utils/env";
+import { useAuth } from "../contexts/AuthContext";
 
 const avatars = [
   getRandomUserAvatar("men", 32),
@@ -71,6 +73,15 @@ export default function Landing() {
   const { scrollY } = useScroll();
   const y = useTransform(scrollY, [0, 100], [0, -50]);
   const opacity = useTransform(scrollY, [0, 100], [1, 0.8]);
+  const navigate = useNavigate();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // Redirect authenticated users to dashboard
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      navigate("/dashboard");
+    }
+  }, [isAuthenticated, isLoading, navigate]);
 
   useEffect(() => {
     const handleScroll = () => {

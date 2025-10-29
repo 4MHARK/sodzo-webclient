@@ -11,6 +11,7 @@ export default defineConfig(({ mode }) => {
       exclude: ["lucide-react"],
     },
     server: {
+      port: 5173,
       proxy: {
         // Proxy /v1 requests to the staging API during local development to avoid CORS
         "/v1": {

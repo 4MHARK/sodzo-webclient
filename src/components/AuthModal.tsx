@@ -35,7 +35,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ open, onClose }) => {
       setLoading(false);
       toast.success("Login successful!");
       onClose();
-      navigate("/dashboard");
+      navigate("/");
     } catch (err) {
       setLoading(false);
       const message = err instanceof Error ? err.message : 'Login failed';

@@ -43,6 +43,8 @@ export const API_ENDPOINTS = {
 const LOCAL_REFRESH_KEY =
   import.meta.env.VITE_REFRESH_TOKEN_KEY || "saby:refresh_token";
 
+export { LOCAL_REFRESH_KEY };
+
 // RefreshResponse type was removed because we accept multiple response shapes from the API
 
 export function createAPI(
@@ -126,6 +128,15 @@ export function createAPI(
         : {};
 
       console.log("🔄 Refresh request body:", body);
+      console.log(
+        "🔄 Refresh endpoint:",
+        `${API_BASE}${API_ENDPOINTS.REFRESH}`
+      );
+      console.log("🔄 Request headers:", {
+        "Content-Type": "application/json",
+      });
+      console.log("🔄 Request withCredentials:", true);
+
       const resp = await axios.post(
         `${API_BASE}${API_ENDPOINTS.REFRESH}`,
         body,
@@ -134,16 +145,28 @@ export function createAPI(
           headers: { "Content-Type": "application/json" },
         }
       );
+
+      console.log("✅ Refresh request successful:", resp.status);
+      console.log("✅ Refresh response data:", resp.data);
       // reset backoff on success
       refreshBackoffMs = 10000;
       refreshCooldownUntil = 0;
       return resp;
     } catch (e: any) {
+      console.log("❌ Refresh request failed:", e.response?.status, e.message);
+      console.log("❌ Refresh error details:", e.response?.data);
+      console.log("❌ Refresh error config:", e.config);
+
       const status = e?.response?.status ?? null;
       if (status === 429) {
         // apply exponential backoff
         refreshCooldownUntil = Date.now() + refreshBackoffMs;
         refreshBackoffMs = Math.min(refreshBackoffMs * 2, REFRESH_BACKOFF_MAX);
+        console.log(
+          "⏰ Refresh rate limited, applying backoff:",
+          refreshBackoffMs,
+          "ms"
+        );
       }
       throw e;
     }

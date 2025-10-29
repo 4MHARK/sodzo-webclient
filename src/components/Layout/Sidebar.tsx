@@ -1,18 +1,15 @@
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  MessageSquare,
   Cloud,
-  FileText,
-  Settings,
   Home,
   Mail,
   ShieldCheck,
   FolderOpen,
   User,
-  Globe,
   LogOut,
   Activity,
+  Calendar,
 } from "lucide-react";
 import { useUser } from "../../contexts/UserContext";
 import { useAuth } from "../../contexts/AuthContext";
@@ -22,13 +19,10 @@ import { getAvatarUrl } from "../../utils/env";
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
   { name: "Projects", href: "/projects", icon: FolderOpen },
-  { name: "Chat", href: "/chat", icon: MessageSquare },
+  { name: "Calendar", href: "/calendar", icon: Calendar },
   { name: "Email Center", href: "/emails", icon: Mail },
   { name: "Cloud Storage", href: "/storage", icon: Cloud },
-  { name: "Forms", href: "/forms", icon: FileText },
-  { name: "Settings", href: "/settings", icon: Settings },
   { name: "Admin", href: "/admin", icon: ShieldCheck, ownerOnly: true },
-  { name: "Data Test", href: "/data-test", icon: Activity, ownerOnly: true },
 ];
 
 // const futureFeatures = [
@@ -232,11 +226,11 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                 Profile Settings
               </Link>
               <Link
-                to="/settings?tab=nodes"
+                to="/data-test"
                 className="flex items-center px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors"
                 onClick={onClose}>
-                <Globe className="w-4 h-4 mr-3" />
-                Node Settings
+                <Activity className="w-4 h-4 mr-3" />
+                Data Test
               </Link>
               <button
                 onClick={() => {

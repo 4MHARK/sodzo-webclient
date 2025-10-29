@@ -6,6 +6,7 @@ import ThemeToggle from '../UI/ThemeToggle';
 import { useUser } from '../../contexts/UserContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { getAvatarUrl } from "../../utils/env";
+import { SessionStatusIndicator } from "../../hooks/useSessionManager";
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -21,13 +22,16 @@ export default function Header({ onMenuClick }: HeaderProps) {
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+      if (
+        profileRef.current &&
+        !profileRef.current.contains(event.target as Node)
+      ) {
         setProfileOpen(false);
       }
     }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   return (
     <motion.header
@@ -57,6 +61,9 @@ export default function Header({ onMenuClick }: HeaderProps) {
 
         {/* Right side */}
         <div className="flex items-center space-x-4">
+          {/* Session Status */}
+          <SessionStatusIndicator />
+
           {/* Theme Toggle */}
           <ThemeToggle />
 
@@ -145,14 +152,10 @@ export default function Header({ onMenuClick }: HeaderProps) {
                   className="block w-full text-left px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-b-lg"
                   onClick={() => {
                     setProfileOpen(false);
-                    // clear both auth and user contexts
-                    try {
-                      logout();
-                    } catch {}
-                    try {
-                      userLogout();
-                    } catch {}
-                    // redirect to landing page
+                    // Use the enhanced logout function which handles cache cleanup and navigation
+                    logout();
+                    userLogout();
+                    // Navigate to homepage
                     navigate("/");
                   }}>
                   Logout

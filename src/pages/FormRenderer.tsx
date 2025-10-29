@@ -72,6 +72,19 @@ export default function FormRenderer() {
       if (projectForm) {
         console.log("📋 Found project form:", projectForm);
         console.log("📊 Project form columnSpans:", projectForm.columnSpans);
+
+        // Debug column span mapping
+        if (projectForm.columnSpans) {
+          console.log("🔍 Column Span Mapping Analysis:");
+          Object.entries(projectForm.columnSpans).forEach(([fieldId, span]) => {
+            const mappedSpan =
+              span === 1 ? 3 : span === 2 ? 6 : span === 3 ? 9 : 12;
+            console.log(
+              `  ${fieldId}: API=${span} → CSS=${mappedSpan} columns`
+            );
+          });
+        }
+
         console.log(
           "🧮 Form elements with formulas:",
           projectForm.elements
@@ -609,8 +622,8 @@ export default function FormRenderer() {
           transition={{ delay: 0.2 }}>
           {/* Render fields based on data type */}
           {formData?.elements ? (
-            // Real project form fields with CSS Grid layout
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            // Real project form fields with CSS Grid layout (12-column system)
+            <div className="grid grid-cols-1 sm:grid-cols-6 lg:grid-cols-12 gap-4">
               {formData.elements.map((element: any, index: number) => {
                 const { id, type } = element;
                 const columnSpan = formData?.columnSpans?.[id] || 4;
@@ -622,31 +635,41 @@ export default function FormRenderer() {
                   );
                 }
 
-                // Calculate CSS grid column span
+                // Calculate CSS grid column span for 12-column system
+                // 1=3, 2=6, 3=9, 4=12 (as requested)
                 const getGridColumns = (span: number) => {
                   switch (span) {
                     case 1:
-                      return 1;
+                      return 3; // 1/4 width
                     case 2:
-                      return 2;
+                      return 6; // 1/2 width
                     case 3:
-                      return 3;
+                      return 9; // 3/4 width
                     case 4:
-                      return 4;
+                      return 12; // full width
                     default:
-                      return 4;
+                      return 12; // default to full width
                   }
                 };
 
                 const actualColumns = getGridColumns(columnSpan);
+                // Use responsive column spans to ensure proper layout on all screen sizes
                 const gridColSpan =
                   type === "header"
-                    ? "col-span-4"
-                    : `col-span-${actualColumns}`;
+                    ? "col-span-1 sm:col-span-6 lg:col-span-12" // Headers always full width
+                    : actualColumns === 12
+                    ? "col-span-1 sm:col-span-6 lg:col-span-12" // Full width fields
+                    : actualColumns === 9
+                    ? "col-span-1 sm:col-span-5 lg:col-span-9" // 3/4 width fields
+                    : actualColumns === 6
+                    ? "col-span-1 sm:col-span-3 lg:col-span-6" // 1/2 width fields
+                    : "col-span-1 sm:col-span-2 lg:col-span-3"; // 1/4 width fields
 
                 // Debug logging for CSS classes
                 if (index < 5) {
-                  console.log(`🎨 Field ${id}: gridColSpan = ${gridColSpan}`);
+                  console.log(
+                    `🎨 Field ${id}: columnSpan=${columnSpan} → gridColSpan=${gridColSpan} (${actualColumns} columns)`
+                  );
                 }
 
                 return (
