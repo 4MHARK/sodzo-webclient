@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { Menu, Bell, Search } from 'lucide-react';
+import { Menu, Bell, Search, User, Globe, LogOut } from "lucide-react";
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from "react-router-dom";
 import ThemeToggle from '../UI/ThemeToggle';
 import { useUser } from '../../contexts/UserContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -140,24 +140,68 @@ export default function Header({ onMenuClick }: HeaderProps) {
               </div>
             </button>
             {profileOpen && (
-              <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
-                <button
-                  className="block w-full text-left px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-b-lg"
-                  onClick={() => {
-                    setProfileOpen(false);
-                    // clear both auth and user contexts
-                    try {
-                      logout();
-                    } catch {}
-                    try {
-                      userLogout();
-                    } catch {}
-                    // redirect to landing page
-                    navigate("/");
-                  }}>
-                  Logout
-                </button>
-              </div>
+              <motion.div
+                className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 overflow-hidden"
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}>
+                {/* User Info Section */}
+                <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                    {user
+                      ? `${user.firstname} ${user.lastname}`
+                      : authUser
+                      ? authUser.name ?? "User"
+                      : "User"}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                    {user?.roles?.[0] ||
+                      (Array.isArray(authUser?.metadata?.roles)
+                        ? String(authUser?.metadata?.roles[0])
+                        : "Project Manager")}
+                  </p>
+                </div>
+
+                {/* Profile Settings Links */}
+                <div className="py-1">
+                  <Link
+                    to="/settings"
+                    className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    onClick={() => setProfileOpen(false)}>
+                    <User className="w-4 h-4 mr-3" />
+                    Profile Settings
+                  </Link>
+                  <Link
+                    to="/settings?tab=nodes"
+                    className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    onClick={() => setProfileOpen(false)}>
+                    <Globe className="w-4 h-4 mr-3" />
+                    Node Settings
+                  </Link>
+                </div>
+
+                {/* Logout */}
+                <div className="border-t border-gray-200 dark:border-gray-700">
+                  <button
+                    className="flex items-center w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                    onClick={() => {
+                      setProfileOpen(false);
+                      // clear both auth and user contexts
+                      try {
+                        logout();
+                      } catch {}
+                      try {
+                        userLogout();
+                      } catch {}
+                      // redirect to landing page
+                      navigate("/");
+                    }}>
+                    <LogOut className="w-4 h-4 mr-3" />
+                    Logout
+                  </button>
+                </div>
+              </motion.div>
             )}
           </div>
         </div>

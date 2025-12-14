@@ -15,6 +15,7 @@ import {
   Edit3,
   Save,
   X,
+  Pencil,
 } from "lucide-react";
 import { useUser } from "../contexts/UserContext";
 import type { User as UserModel } from "../contexts/UserContext";
@@ -23,6 +24,14 @@ import { mockUser } from "../data/mockData";
 import toast from "react-hot-toast";
 import NodeProfileClean from "./NodeProfileClean";
 import { useSearchParams } from "react-router-dom";
+import {
+  mapUserProfileToFields,
+  mapUserSchemaToFields,
+  convertFormValuesToAPIFormat,
+  FormField,
+} from "../utils/formMapper";
+import DynamicFormRenderer from "../components/Forms/DynamicFormRenderer";
+import EmailPhoneChangeModal from "../components/Modals/EmailPhoneChangeModal";
 
 export default function Settings() {
   const { user: userContextUser, setUser: setUserContext } = useUser();
@@ -72,535 +81,437 @@ export default function Settings() {
 
   const renderProfileTab = () => (
     <div className="space-y-6">
-      <div className="flex items-center justify-center space-x-6">
-        <div className="relative flex ">
-          <img
-            src={user?.avatar || mockUser[0]?.avatar}
-            alt="Profile"
-            className="w-auto h-36 rounded-full mb-4 "
-          />
-          {/* <button className="absolute bottom-0 right-0 p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors">
-            <Upload className="w-4 h-4" />
-          </button> */}
-        </div>
-        {/* <div>
-          <h3 className="text-lg font-medium text-gray-900">Profile Photo</h3>
-          <p className="text-sm text-gray-500">Update your profile photo and personal details</p>
-        </div> */}
-      </div>
-
       {/* Profile Form - editable fields */}
       <EditableProfileForm />
     </div>
   );
 
   function EditableProfileForm() {
-    // Normalize profile values from AuthContext (authUser), UserContext (userContextUser) and mock data
-    const mock = mockUser[0];
-    const auth = authUser as unknown as
-      | {
-          name?: string;
-          email?: string;
-          avatarUrl?: string;
-          metadata?: Record<string, unknown>;
-        }
-      | undefined;
-    const getProp = <T, K extends string>(
-      obj: unknown,
-      key: K
-    ): T | undefined => {
-      if (obj && typeof obj === "object" && key in obj)
-        return (obj as Record<string, unknown>)[key] as T | undefined;
-      return undefined;
-    };
-    const userCtx = userContextUser as Partial<UserModel> | undefined;
-
-    const profile = {
-      firstname:
-        userCtx?.firstname ??
-        (auth?.name ? String(auth.name).split(" ")[0] : undefined) ??
-        mock.firstname,
-      lastname:
-        userCtx?.lastname ??
-        (auth?.name
-          ? String(auth.name).split(" ").slice(1).join(" ")
-          : undefined) ??
-        mock.lastname,
-      email: userCtx?.email ?? auth?.email ?? mock.email,
-      phoneNumber:
-        userCtx?.phoneNumber ??
-        getProp<string, "phoneNumber">(auth, "phoneNumber") ??
-        auth?.metadata?.phoneNumber ??
-        auth?.metadata?.phone ??
-        undefined,
-      roles:
-        userCtx?.roles ??
-        (Array.isArray(auth?.metadata?.roles)
-          ? auth!.metadata!.roles
-          : auth?.metadata?.roles
-          ? [String(auth!.metadata!.roles)]
-          : mock.roles),
-      haloId: userCtx?.haloId ?? auth?.metadata?.haloId ?? mock.haloId,
-      tenantId: userCtx?.tenantId ?? auth?.metadata?.tenantId ?? mock.tenantId,
-      isEmailVerified:
-        userCtx?.isEmailVerified ??
-        auth?.metadata?.isEmailVerified ??
-        mock.isEmailVerified,
-      isPhoneVerified:
-        userCtx?.isPhoneVerified ??
-        auth?.metadata?.isPhoneVerified ??
-        mock.isPhoneVerified,
-      isSuper: userCtx?.isSuper ?? auth?.metadata?.isSuper ?? mock.isSuper,
-      avatar: userCtx?.avatar ?? auth?.avatarUrl ?? mock.avatar,
-      createdAt:
-        userCtx?.createdAt ??
-        getProp<string, "createdAt">(auth, "createdAt") ??
-        undefined,
-    } as Partial<UserModel & Record<string, unknown>>;
-
-    // Enhanced form state with more fields
-    const [firstname, setFirstname] = useState(profile.firstname ?? "");
-    const [lastname, setLastname] = useState(profile.lastname ?? "");
-    const [emailVal, setEmailVal] = useState(profile.email ?? "");
-    const [phone, setPhone] = useState(profile.phoneNumber ?? "");
-    const [address, setAddress] = useState("");
-    const [city, setCity] = useState("");
-    const [state, setState] = useState("");
-    const [zipCode, setZipCode] = useState("");
-    const [dateOfBirth, setDateOfBirth] = useState("");
-    const [occupation, setOccupation] = useState("");
-    const [company, setCompany] = useState("");
-    const [bio, setBio] = useState("");
+    const [userData, setUserData] = useState<any>(null);
+    const [formFields, setFormFields] = useState<FormField[]>([]);
+    const [formValues, setFormValues] = useState<Record<string, any>>({});
+    const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
-    const [loadingSave, setLoadingSave] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [emailModalOpen, setEmailModalOpen] = useState(false);
+    const [phoneModalOpen, setPhoneModalOpen] = useState(false);
 
-    const memberSince = profile?.createdAt
-      ? new Date(String(profile.createdAt)).toLocaleDateString()
-      : null;
-
-    const handleSave = async () => {
-      if (!user?.id) return toast.error("No user ID available");
-
-      setLoadingSave(true);
-      try {
-        // Debug: see API request interceptor logs for token presence
-        const payload: Record<string, unknown> = {
-          email: emailVal,
-          firstname: firstname,
-          lastname: lastname,
-          phoneNumber: phone,
-        };
-
-        // Debug: log access token presence before sending request
-        console.debug("[Settings] accessToken present:", Boolean(accessToken));
-        // Ensure we attempt a refresh (guards/backoff applied) before PATCH so server will accept Authorization if returned
-        try {
-          const doRefresh = (api as any)?._doRefresh as
-            | (() => Promise<any>)
-            | undefined;
-          if (doRefresh) {
-            await doRefresh();
-          } else {
-            // fallback: call refresh endpoint directly
-            await api.post(
-              "/auth/refresh-tokens",
-              {},
-              { withCredentials: true }
-            );
-          }
-        } catch (refreshErr) {
-          console.warn("[Settings] refresh before save failed", refreshErr);
-          // If refresh fails, log user out to surface re-auth requirement
-          logout();
-          toast.error("Session expired — please sign in again");
-          setLoadingSave(false);
+    // Fetch user profile and schema on mount
+    useEffect(() => {
+      const fetchUserProfile = async () => {
+        if (!user?.id) {
+          setLoading(false);
           return;
         }
 
-        // Use Axios instance from AuthContext which will attach the access token and handle refresh
+        try {
+          setLoading(true);
+
+          // Fetch both schema and actual user data in parallel
+          const [schemaResponse, dataResponse] = await Promise.all([
+            api.get(`/schema/user`).catch(() => null), // Schema is optional
+            api.get(`/users/${user.id}`),
+          ]);
+
+          const fullUserData = dataResponse.data;
+          setUserData(fullUserData);
+
+          // Use schema if available, otherwise fallback to data-driven mapping
+          let fields: FormField[] = [];
+          if (schemaResponse?.data?.data) {
+            // Use schema-based mapping for accurate field definitions
+            fields = mapUserSchemaToFields(
+              schemaResponse.data.data,
+              fullUserData
+            );
+          } else {
+            // Fallback to data-driven mapping
+            fields = mapUserProfileToFields(fullUserData);
+          }
+
+          setFormFields(fields);
+
+          // Initialize form values from user data
+          const initialValues: Record<string, any> = {};
+          fields.forEach((field) => {
+            // Get nested value from userData (e.g., "customFields.title" -> userData.customFields.title)
+            const value = getNestedValue(fullUserData, field.name);
+            // Store as flat key for formValues (e.g., "customFields.title" as key)
+            initialValues[field.name] =
+              value !== undefined && value !== null
+                ? value
+                : field.value !== undefined && field.value !== null
+                ? field.value
+                : "";
+          });
+          setFormValues(initialValues);
+        } catch (err: any) {
+          if (err.response?.status === 401) {
+            logout();
+            toast.error("Session expired — please sign in again");
+          } else {
+            toast.error("Failed to load profile");
+          }
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchUserProfile();
+    }, [user?.id, api, logout]);
+
+    const getNestedValue = (obj: any, path: string): any => {
+      return path.split(".").reduce((current, key) => {
+        return current && typeof current === "object"
+          ? current[key]
+          : undefined;
+      }, obj);
+    };
+
+    const handleFieldChange = (fieldPath: string, value: any) => {
+      setFormValues((prev) => ({
+        ...prev,
+        [fieldPath]: value,
+      }));
+    };
+
+    const handleSave = async () => {
+      if (!user?.id || !userData) return;
+
+      setSaving(true);
+      try {
+        // Convert flat form values back to nested API format
+        const payload = convertFormValuesToAPIFormat(formValues, userData);
+
+        // Debug: Log payload before submission (dev only)
+        if (import.meta.env.DEV) {
+          console.log(
+            "[Settings] Payload to submit:",
+            JSON.stringify(payload, null, 2)
+          );
+        }
+
+        // Note: Token refresh is handled automatically by the API interceptor on 401 errors
+        // No need to manually refresh before saving - the interceptor will handle it if needed
+
+        // Update user profile
+        if (import.meta.env.DEV) {
+          console.log(
+            "[Settings] Making PATCH request to:",
+            `/users/${user.id}`
+          );
+        }
         const resp = await api.patch(`/users/${user.id}`, payload);
-        const updated = resp.data as Partial<UserModel>;
+        if (import.meta.env.DEV) {
+          console.log("[Settings] Response received:", resp);
+          console.log("[Settings] Response data:", resp.data);
+        }
+
+        // Handle response - check if it's wrapped in success/data structure
+        const responseData = resp.data;
+        const updated = (responseData?.data ||
+          responseData) as Partial<UserModel>;
+        if (import.meta.env.DEV) {
+          console.log("[Settings] Extracted user data:", updated);
+        }
+
+        // Update user data and form fields
+        const mergedData = { ...userData, ...updated };
+        setUserData(mergedData);
+
+        // Regenerate form fields in case structure changed
+        const updatedFields = mapUserProfileToFields(mergedData);
+        setFormFields(updatedFields);
+
+        // Update form values with new data
+        const updatedValues: Record<string, any> = {};
+        updatedFields.forEach((field) => {
+          const value = getNestedValue(mergedData, field.name);
+          updatedValues[field.name] = value ?? field.value ?? "";
+        });
+        setFormValues(updatedValues);
+
+        // Update contexts
         const merged = { ...(userContextUser ?? {}), ...updated } as UserModel;
-        // update both contexts where available
         setUserContext(merged);
-        // AuthContext user shape may differ; set it if available
-        if (typeof setAuthUser === "function")
+        if (typeof setAuthUser === "function") {
           setAuthUser(merged as unknown as UserModel);
-        toast.success("Profile updated");
+        }
+
+        toast.success("Profile updated successfully!");
+        setIsEditing(false);
       } catch (err: unknown) {
+        console.error("[Settings] Save error:", err);
         let msg = "Update failed";
-        if (err instanceof Error) msg = err.message;
-        // If the refresh token is missing the API factory throws a specific error
+        if (err instanceof Error) {
+          msg = err.message;
+        }
+        if ((err as any)?.response) {
+          const errorResponse = (err as any).response;
+          console.error("[Settings] Error response:", errorResponse);
+          console.error("[Settings] Error response data:", errorResponse.data);
+          console.error("[Settings] Error status:", errorResponse.status);
+          msg =
+            errorResponse?.data?.message || errorResponse?.data?.error || msg;
+        }
         if (
           typeof msg === "string" &&
           msg.includes("No refresh token available")
         ) {
-          // Clear auth state and prompt for sign-in
           logout();
           toast.error("Session expired — please sign in again");
         } else {
-          toast.error(msg);
+          toast.error(msg || "Failed to update profile. Please try again.");
         }
       } finally {
-        setLoadingSave(false);
+        setSaving(false);
       }
     };
 
+    if (loading) {
+      return (
+        <div className="flex justify-center items-center h-64 text-gray-500">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="ml-3">Loading profile...</span>
+        </div>
+      );
+    }
+
+    if (!userData) {
+      return (
+        <div className="text-center text-gray-500 mt-10">
+          <UserIcon className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+          <p className="text-xl font-semibold">No profile data available</p>
+        </div>
+      );
+    }
+
+    const displayName =
+      `${userData.firstname || ""} ${userData.lastname || ""}`.trim() || "User";
+    const memberSince = userData.createdAt
+      ? new Date(userData.createdAt).toLocaleDateString()
+      : null;
+
     return (
       <div className="space-y-8">
-        {/* Profile Header */}
+        {/* Profile Header Card - Redesigned */}
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-6 border border-blue-200 dark:border-blue-800">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            {/* Left: Avatar and User Info */}
+            <div className="flex items-center space-x-4 flex-1">
               <div className="relative">
                 <img
-                  src={profile.avatar || mockUser[0]?.avatar}
+                  src={userData.avatar || mockUser[0]?.avatar}
                   alt="Profile"
-                  className="w-20 h-20 rounded-full border-4 border-white dark:border-gray-700 shadow-lg"
+                  className="w-24 h-24 rounded-full border-4 border-white dark:border-gray-700 shadow-lg"
                 />
                 <button className="absolute -bottom-2 -right-2 p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors shadow-lg">
                   <Camera className="w-4 h-4" />
                 </button>
               </div>
-              <div>
+              <div className="flex-1">
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {firstname} {lastname}
+                  {displayName}
                 </h2>
-                <p className="text-gray-600 dark:text-gray-300">{emailVal}</p>
-                <div className="flex items-center space-x-4 mt-2">
-                  <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                    <Calendar className="w-4 h-4 mr-1" />
+                <p className="text-gray-600 dark:text-gray-300 mt-1">
+                  {userData.email}
+                </p>
+                <div className="flex flex-wrap items-center gap-4 mt-3">
+                  <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                    <Calendar className="w-4 h-4 mr-1.5" />
                     Member since {memberSince ?? "Unknown"}
                   </div>
-                  <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                    <Shield className="w-4 h-4 mr-1" />
-                    {profile.isSuper ? "Admin" : "Member"}
+                  <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                    <Shield className="w-4 h-4 mr-1.5" />
+                    {userData.isSuper || userData.isAdmin ? "Admin" : "Member"}
                   </div>
                 </div>
               </div>
             </div>
+
+            {/* Right: Edit Button */}
             <button
               onClick={() => setIsEditing(!isEditing)}
-              className="flex items-center px-4 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+              className="flex items-center px-4 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors whitespace-nowrap">
               <Edit3 className="w-4 h-4 mr-2" />
               {isEditing ? "Cancel" : "Edit Profile"}
             </button>
           </div>
-        </div>
 
-        {/* Personal Information Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center mb-6">
-            <UserIcon className="w-5 h-5 text-blue-600 dark:text-blue-400 mr-2" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Personal Information
-            </h3>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                First Name
-              </label>
-              <input
-                type="text"
-                value={firstname}
-                onChange={(e) => setFirstname(e.target.value)}
-                disabled={!isEditing}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-              />
+          {/* Account Status Section - Moved into Header */}
+          <div className="mt-6 pt-6 border-t border-blue-200 dark:border-blue-800">
+            <div className="flex items-center mb-4">
+              <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400 mr-2" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">
+                Account Status
+              </h3>
             </div>
 
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Last Name
-              </label>
-              <input
-                type="text"
-                value={lastname}
-                onChange={(e) => setLastname(e.target.value)}
-                disabled={!isEditing}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Email Address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                  type="email"
-                  value={emailVal}
-                  onChange={(e) => setEmailVal(e.target.value)}
-                  disabled={!isEditing}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Phone Number
-              </label>
-              <div className="relative">
-                <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  disabled={!isEditing}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Date of Birth
-              </label>
-              <input
-                type="date"
-                value={dateOfBirth}
-                onChange={(e) => setDateOfBirth(e.target.value)}
-                disabled={!isEditing}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Occupation
-              </label>
-              <input
-                type="text"
-                value={occupation}
-                onChange={(e) => setOccupation(e.target.value)}
-                disabled={!isEditing}
-                placeholder="Enter your occupation"
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Address Information Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center mb-6">
-            <MapPin className="w-5 h-5 text-green-600 dark:text-green-400 mr-2" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Address Information
-            </h3>
-          </div>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Street Address
-              </label>
-              <input
-                type="text"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                disabled={!isEditing}
-                placeholder="Enter your street address"
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  City
-                </label>
-                <input
-                  type="text"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  disabled={!isEditing}
-                  placeholder="City"
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  State
-                </label>
-                <input
-                  type="text"
-                  value={state}
-                  onChange={(e) => setState(e.target.value)}
-                  disabled={!isEditing}
-                  placeholder="State"
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  ZIP Code
-                </label>
-                <input
-                  type="text"
-                  value={zipCode}
-                  onChange={(e) => setZipCode(e.target.value)}
-                  disabled={!isEditing}
-                  placeholder="ZIP Code"
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Professional Information Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center mb-6">
-            <Building className="w-5 h-5 text-purple-600 dark:text-purple-400 mr-2" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Professional Information
-            </h3>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Company
-              </label>
-              <input
-                type="text"
-                value={company}
-                onChange={(e) => setCompany(e.target.value)}
-                disabled={!isEditing}
-                placeholder="Enter your company name"
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Role
-              </label>
-              <select
-                disabled={!isEditing}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed">
-                <option value="">Select your role</option>
-                <option value="member">Member</option>
-                <option value="volunteer">Volunteer</option>
-                <option value="leader">Leader</option>
-                <option value="pastor">Pastor</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="mt-6 space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Bio
-            </label>
-            <textarea
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              disabled={!isEditing}
-              rows={4}
-              placeholder="Tell us about yourself..."
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed resize-none"
-            />
-          </div>
-        </div>
-
-        {/* Account Status Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center mb-6">
-            <Shield className="w-5 h-5 text-orange-600 dark:text-orange-400 mr-2" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Account Status
-            </h3>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <div className="flex items-center">
-                <Mail className="w-5 h-5 text-gray-500 dark:text-gray-400 mr-3" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    Email Verified
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Your email address is verified
-                  </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800/50 rounded-lg border border-blue-100 dark:border-blue-900/50">
+                <div className="flex items-center flex-1 min-w-0">
+                  <Mail className="w-5 h-5 text-gray-500 dark:text-gray-400 mr-3 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                      Email Address
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                      {userData?.email || "Not set"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-3 flex-shrink-0">
+                  <div className="flex items-center">
+                    <span
+                      className={`inline-block w-3 h-3 mr-2 rounded-full ${
+                        userData?.isEmailVerified
+                          ? "bg-green-500"
+                          : "bg-red-500"
+                      }`}
+                    />
+                    <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                      {userData?.isEmailVerified ? "Verified" : "Not Verified"}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setEmailModalOpen(true)}
+                    className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors touch-target"
+                    title="Change email address">
+                    <Pencil className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center">
-                <span
-                  className={`inline-block w-3 h-3 mr-2 rounded-full ${
-                    user?.isEmailVerified ?? profile?.isEmailVerified
-                      ? "bg-green-500"
-                      : "bg-red-500"
-                  }`}
-                />
-                <span className="text-sm">
-                  {user?.isEmailVerified ?? profile?.isEmailVerified
-                    ? "Yes"
-                    : "No"}
-                </span>
-              </div>
-            </div>
 
-            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <div className="flex items-center">
-                <Phone className="w-5 h-5 text-gray-500 dark:text-gray-400 mr-3" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    Phone Verified
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Your phone number is verified
-                  </p>
+              <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800/50 rounded-lg border border-blue-100 dark:border-blue-900/50">
+                <div className="flex items-center flex-1 min-w-0">
+                  <Phone className="w-5 h-5 text-gray-500 dark:text-gray-400 mr-3 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                      Phone Number
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                      {userData?.phoneNumber || "Not set"}
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center">
-                <span
-                  className={`inline-block w-3 h-3 mr-2 rounded-full ${
-                    user?.isPhoneVerified ?? profile?.isPhoneVerified
-                      ? "bg-green-500"
-                      : "bg-red-500"
-                  }`}
-                />
-                <span className="text-sm">
-                  {user?.isPhoneVerified ?? profile?.isPhoneVerified
-                    ? "Yes"
-                    : "No"}
-                </span>
+                <div className="flex items-center space-x-3 flex-shrink-0">
+                  <div className="flex items-center">
+                    <span
+                      className={`inline-block w-3 h-3 mr-2 rounded-full ${
+                        userData?.isPhoneVerified
+                          ? "bg-green-500"
+                          : "bg-red-500"
+                      }`}
+                    />
+                    <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                      {userData?.isPhoneVerified ? "Verified" : "Not Verified"}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setPhoneModalOpen(true)}
+                    className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors touch-target"
+                    title="Change phone number">
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
+
+        {/* Dynamic Form - Renders all fields from profile and customFields */}
+        <DynamicFormRenderer
+          fields={formFields}
+          values={formValues}
+          onChange={handleFieldChange}
+          disabled={!isEditing}
+        />
 
         {/* Action Buttons */}
         {isEditing && (
           <div className="flex items-center justify-end space-x-4 pt-6 border-t border-gray-200 dark:border-gray-700">
             <button
-              onClick={() => setIsEditing(false)}
+              onClick={() => {
+                setIsEditing(false);
+                // Reset form values to original data
+                const resetValues: Record<string, any> = {};
+                formFields.forEach((field) => {
+                  const value = getNestedValue(userData, field.name);
+                  resetValues[field.name] = value ?? field.value ?? "";
+                });
+                setFormValues(resetValues);
+              }}
               className="flex items-center px-6 py-3 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
               <X className="w-4 h-4 mr-2" />
               Cancel
             </button>
             <button
               onClick={handleSave}
-              disabled={loadingSave}
+              disabled={saving}
               className={`flex items-center px-6 py-3 rounded-lg text-white transition-colors ${
-                loadingSave
+                saving
                   ? "bg-gray-400 cursor-not-allowed"
                   : "bg-blue-600 hover:bg-blue-700"
               }`}>
               <Save className="w-4 h-4 mr-2" />
-              {loadingSave ? "Saving..." : "Save Changes"}
+              {saving ? "Saving..." : "Save Changes"}
             </button>
           </div>
         )}
+
+        {/* Email Change Modal */}
+        <EmailPhoneChangeModal
+          isOpen={emailModalOpen}
+          onClose={() => setEmailModalOpen(false)}
+          type="email"
+          currentValue={userData?.email || ""}
+          onSuccess={async () => {
+            // Reload user data after successful change
+            if (user?.id) {
+              try {
+                const resp = await api.get(`/users/${user.id}`);
+                const updated = resp.data;
+                setUserData(updated);
+                // Update form values
+                const updatedValues: Record<string, any> = {};
+                formFields.forEach((field) => {
+                  const value = getNestedValue(updated, field.name);
+                  updatedValues[field.name] = value ?? field.value ?? "";
+                });
+                setFormValues(updatedValues);
+              } catch (err) {
+                console.error("Failed to reload user data:", err);
+              }
+            }
+          }}
+        />
+
+        {/* Phone Change Modal */}
+        <EmailPhoneChangeModal
+          isOpen={phoneModalOpen}
+          onClose={() => setPhoneModalOpen(false)}
+          type="phone"
+          currentValue={userData?.phoneNumber || ""}
+          onSuccess={async () => {
+            // Reload user data after successful change
+            if (user?.id) {
+              try {
+                const resp = await api.get(`/users/${user.id}`);
+                const updated = resp.data;
+                setUserData(updated);
+                // Update form values
+                const updatedValues: Record<string, any> = {};
+                formFields.forEach((field) => {
+                  const value = getNestedValue(updated, field.name);
+                  updatedValues[field.name] = value ?? field.value ?? "";
+                });
+                setFormValues(updatedValues);
+              } catch (err) {
+                console.error("Failed to reload user data:", err);
+              }
+            }
+          }}
+        />
       </div>
     );
   }

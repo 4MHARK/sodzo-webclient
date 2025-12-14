@@ -1,17 +1,14 @@
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  MessageSquare,
   Cloud,
-  FileText,
-  Settings,
   Home,
   Mail,
   ShieldCheck,
   FolderOpen,
-  User,
-  Globe,
-  LogOut,
+  Network,
+  Calendar,
+  BarChart3,
 } from "lucide-react";
 import { useUser } from "../../contexts/UserContext";
 import { useAuth } from "../../contexts/AuthContext";
@@ -21,11 +18,11 @@ import { getAvatarUrl } from "../../utils/env";
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
   { name: "Projects", href: "/projects", icon: FolderOpen },
-  { name: "Chat", href: "/chat", icon: MessageSquare },
+  { name: "Network", href: "/network", icon: Network },
+  { name: "Calendar", href: "/calendar", icon: Calendar },
   { name: "Email Center", href: "/emails", icon: Mail },
   { name: "Cloud Storage", href: "/storage", icon: Cloud },
-  { name: "Forms", href: "/forms", icon: FileText },
-  { name: "Settings", href: "/settings", icon: Settings },
+  { name: "Reports", href: "/reports", icon: BarChart3 },
   { name: "Admin", href: "/admin", icon: ShieldCheck, ownerOnly: true },
 ];
 
@@ -45,6 +42,27 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
   const { user } = useUser();
   const { user: authUser, logout } = useAuth();
+
+  // Check if user has admin privileges (isSaby, isOwner, or isSuper)
+  // Only users with these privileges should see Admin link
+  // Note: isAdmin alone is NOT sufficient - regular admins cannot see Admin section
+  const currentUser = user || (authUser as any);
+  const hasAdminAccess =
+    currentUser?.isSaby === true ||
+    currentUser?.isOwner === true ||
+    currentUser?.isSuper === true;
+
+  // Debug in development
+  if (import.meta.env.DEV && currentUser) {
+    console.debug("[Sidebar] Admin access check:", {
+      hasAdminAccess,
+      isSaby: currentUser.isSaby,
+      isOwner: currentUser.isOwner,
+      isSuper: currentUser.isSuper,
+      isAdmin: currentUser.isAdmin,
+    });
+  }
+
   const sidebarVariants = {
     open: { x: 0 },
     closed: { x: "-100%" },
@@ -106,13 +124,15 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           {/* Navigation */}
           <nav className="flex-1 px-4 py-6 space-y-2 bg-white dark:bg-gray-800">
             <div className="space-y-1">
-              {navigation.map((item, index) => {
-                // TEMPORARY: show ownerOnly (Admin) items regardless of isSuper until privileges are granted
-                // TODO: revert this gating once admin privileges are restored by senior dev
-                // if (item.ownerOnly) {
-                //   ... gating logic removed intentionally
-                // }
-
+              {navigation
+                .filter((item) => {
+                  // Filter out Admin link if user doesn't have admin access
+                  if (item.ownerOnly) {
+                    return hasAdminAccess;
+                  }
+                  return true;
+                })
+                .map((item, index) => {
                 const isActive = location.pathname === item.href;
                 return (
                   <motion.div
@@ -218,33 +238,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                       : mockUser[0]?.roles?.[0] || "Project Manager")}
                 </p>
               </div>
-            </div>
-
-            {/* Profile Settings Links */}
-            <div className="mt-4 space-y-1">
-              <Link
-                to="/settings"
-                className="flex items-center px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                onClick={onClose}>
-                <User className="w-4 h-4 mr-3" />
-                Profile Settings
-              </Link>
-              <Link
-                to="/settings?tab=nodes"
-                className="flex items-center px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                onClick={onClose}>
-                <Globe className="w-4 h-4 mr-3" />
-                Node Settings
-              </Link>
-              <button
-                onClick={() => {
-                  logout();
-                  onClose();
-                }}
-                className="flex items-center w-full px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
-                <LogOut className="w-4 h-4 mr-3" />
-                Logout
-              </button>
             </div>
           </motion.div>
         </div>

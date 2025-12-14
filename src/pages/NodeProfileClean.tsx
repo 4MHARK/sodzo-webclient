@@ -5,145 +5,146 @@ import {
   Save,
   X,
   Building,
-  MapPin,
-  Phone,
-  Mail,
   Calendar,
-  Users,
-  FileText,
   Camera,
-  Shield,
-  CheckCircle,
-  AlertCircle,
-  Upload,
-  Download,
-  Eye,
-  EyeOff,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import { useUser } from "../contexts/UserContext";
+import type { User as UserModel } from "../contexts/UserContext";
 import toast from "react-hot-toast";
+import {
+  mapNodeProfileToFields,
+  mapNodeSchemaToFields,
+  convertFormValuesToAPIFormat,
+  FormField,
+} from "../utils/formMapper";
+import DynamicFormRenderer from "../components/Forms/DynamicFormRenderer";
 
 export default function NodeProfileClean() {
-  const { api, logout } = useAuth();
+  const { api, logout, user: authUser } = useAuth();
+  const { user: userContextUser } = useUser();
   const [nodes, setNodes] = useState<any[]>([]);
   const [selectedNode, setSelectedNode] = useState<any>(null);
+  const [nodeData, setNodeData] = useState<any>(null);
+  const [formFields, setFormFields] = useState<FormField[]>([]);
+  const [formValues, setFormValues] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Enhanced form state with comprehensive organization details
-  const [formData, setFormData] = useState({
-    // Basic Information
-    name: "",
-    description: "",
-    level: "",
-    establishedDate: "",
-    registrationNumber: "",
-
-    // Contact Information
-    phone: "",
-    email: "",
-    website: "",
-    socialMedia: "",
-
-    // Address Information
-    address: "",
-    city: "",
-    state: "",
-    zipCode: "",
-    country: "",
-
-    // Property Status
-    propertyOwnership: "",
-    propertySize: "",
-    propertyValue: "",
-    mortgageStatus: "",
-
-    // Legal Documents
-    registrationCertificate: null,
-    taxExemptStatus: "",
-    insurancePolicy: null,
-    propertyDeed: null,
-
-    // Organization Details
-    denomination: "",
-    churchType: "",
-    membershipCount: "",
-    staffCount: "",
-    serviceTimes: "",
-    programs: "",
-
-    // Financial Information
-    annualBudget: "",
-    fundingSources: "",
-    donations: "",
-
-    // System Information
-    nodeId: "",
-    tenantId: "",
-  });
+  // Get user ID from context - prefer AuthContext, fallback to UserContext
+  const user: Partial<UserModel> | null =
+    (authUser as unknown as Partial<UserModel>) ?? userContextUser ?? null;
+  const userId = user?.id;
 
   // Fetch nodes on mount
   useEffect(() => {
     const fetchNodes = async () => {
+      if (!userId) {
+        setLoading(false);
+        return;
+      }
+
       try {
-        const res = await api.get("/node");
-        const data = res.data.results;
+        setLoading(true);
+        const res = await api.get(`/users/${userId}/nodes`);
+        const data = res.data?.results || res.data || [];
         setNodes(data);
         if (data.length > 0) {
           setSelectedNode(data[0]);
-          setFormData(mapNodeToForm(data[0]));
         }
       } catch (err: any) {
-        if (err.response?.status === 401) logout();
-        toast.error("Failed to load church information");
+        if (err.response?.status === 401) {
+          logout();
+          toast.error("Session expired — please sign in again");
+        } else {
+          toast.error("Failed to load church information");
+        }
       } finally {
         setLoading(false);
       }
     };
     fetchNodes();
-  }, [api, logout]);
+  }, [userId, api, logout]);
 
-  // When node changes, update form data
+  // When a node is selected, fetch its full details and generate form fields
   useEffect(() => {
-    if (selectedNode) setFormData(mapNodeToForm(selectedNode));
-  }, [selectedNode]);
+    const loadNodeDetails = async () => {
+      if (!selectedNode || !selectedNode.id) {
+        setNodeData(null);
+        setFormFields([]);
+        setFormValues({});
+        return;
+      }
 
-  const mapNodeToForm = (node: any) => ({
-    name: node.structure?.name || "",
-    description: node.structure?.description || "",
-    level: node.level?.name || "",
-    establishedDate: "",
-    registrationNumber: "",
-    phone: "",
-    email: "",
-    website: "",
-    socialMedia: "",
-    address: node.address || "",
-    city: node.city || "",
-    state: node.state || "",
-    zipCode: "",
-    country: node.country || "",
-    propertyOwnership: "",
-    propertySize: "",
-    propertyValue: "",
-    mortgageStatus: "",
-    registrationCertificate: null,
-    taxExemptStatus: "",
-    insurancePolicy: null,
-    propertyDeed: null,
-    denomination: "",
-    churchType: "",
-    membershipCount: "",
-    staffCount: "",
-    serviceTimes: "",
-    programs: "",
-    annualBudget: "",
-    fundingSources: "",
-    donations: "",
-    nodeId: node.nodeId || "",
-    tenantId: node.tenantId || "",
-  });
+      try {
+        setLoading(true);
+
+        // Fetch both schema and actual node data in parallel
+        const [schemaResponse, dataResponse] = await Promise.all([
+          api.get(`/schema/node`).catch(() => null), // Schema is optional
+          api.get(`/node/${selectedNode.id}`),
+        ]);
+
+        const fullNodeData = dataResponse.data;
+        setNodeData(fullNodeData);
+
+        // Use schema if available, otherwise fallback to data-driven mapping
+        let fields: FormField[] = [];
+        if (schemaResponse?.data?.data) {
+          // Use schema-based mapping for accurate field definitions
+          fields = mapNodeSchemaToFields(
+            schemaResponse.data.data,
+            fullNodeData
+          );
+        } else {
+          // Fallback to data-driven mapping
+          fields = mapNodeProfileToFields(fullNodeData);
+        }
+
+        setFormFields(fields);
+
+        // Initialize form values from node data
+        const initialValues: Record<string, any> = {};
+        fields.forEach((field) => {
+          // Get nested value from nodeData (e.g., "customFields.title" -> nodeData.customFields.title)
+          const value = getNestedValue(fullNodeData, field.name);
+          // Store as flat key for formValues (e.g., "customFields.title" as key)
+          initialValues[field.name] =
+            value !== undefined && value !== null
+              ? value
+              : field.value !== undefined && field.value !== null
+              ? field.value
+              : "";
+        });
+        setFormValues(initialValues);
+      } catch (err: any) {
+        if (err.response?.status === 401) {
+          logout();
+          toast.error("Session expired — please sign in again");
+        } else {
+          toast.error("Failed to load node details");
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadNodeDetails();
+  }, [selectedNode, api, logout]);
+
+  const getNestedValue = (obj: any, path: string): any => {
+    return path.split(".").reduce((current, key) => {
+      return current && typeof current === "object" ? current[key] : undefined;
+    }, obj);
+  };
+
+  const handleFieldChange = (fieldPath: string, value: any) => {
+    setFormValues((prev) => ({
+      ...prev,
+      [fieldPath]: value,
+    }));
+  };
 
   const handleSelect = (nodeId: string) => {
     const node = nodes.find((n) => n.id === nodeId);
@@ -151,33 +152,154 @@ export default function NodeProfileClean() {
     setIsEditing(false);
   };
 
-  const handleChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >
-  ) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const handleFileChange = (field: string, file: File | null) => {
-    setFormData({ ...formData, [field]: file });
-  };
-
   const handleSave = async () => {
+    if (!selectedNode?.id || !nodeData) return;
+
     setSaving(true);
     try {
-      // Future PATCH integration (ready for backend)
-      // await api.patch(`/users/${selectedUserId}/nodes/${selectedNode.id}`, formData);
+      // Convert flat form values back to nested API format
+      const payload = convertFormValuesToAPIFormat(formValues, nodeData);
 
-      console.log("Data ready for PATCH:", formData);
-      toast.success("Church profile updated successfully!");
+      // Debug: Log payload before submission (dev only)
+      if (import.meta.env.DEV) {
+        console.log(
+          "[NodeProfile] Payload to submit:",
+          JSON.stringify(payload, null, 2)
+        );
+      }
+
+      // Update node profile
+      // Try the user-specific endpoint first, fallback to direct node endpoint only for 404
+      let resp;
+      try {
+        if (import.meta.env.DEV) {
+          console.log(
+            "[NodeProfile] Trying endpoint:",
+            `/users/${userId}/nodes/${selectedNode.id}`
+          );
+        }
+        resp = await api.patch(
+          `/users/${userId}/nodes/${selectedNode.id}`,
+          payload
+        );
+        if (import.meta.env.DEV) {
+          console.log("[NodeProfile] Response from user endpoint:", resp);
+        }
+      } catch (err: any) {
+        if (import.meta.env.DEV) {
+          console.warn(
+            "[NodeProfile] User endpoint failed:",
+            err.response?.status,
+            err.response?.data
+          );
+        }
+
+        // If user-specific endpoint fails, try fallback endpoint
+        // 404 = endpoint doesn't exist, try fallback
+        // 403 = might be endpoint-specific permission, still try fallback
+        if (err.response?.status === 404 || err.response?.status === 403) {
+          if (import.meta.env.DEV) {
+            console.log(
+              `[NodeProfile] Primary endpoint failed with ${err.response?.status}, trying fallback endpoint:`,
+              `/node/${selectedNode.id}`
+            );
+          }
+          try {
+            resp = await api.patch(`/node/${selectedNode.id}`, payload);
+            if (import.meta.env.DEV) {
+              console.log(
+                "[NodeProfile] Response from fallback endpoint:",
+                resp
+              );
+            }
+          } catch (fallbackErr: any) {
+            if (import.meta.env.DEV) {
+              console.warn(
+                "[NodeProfile] Fallback endpoint also failed:",
+                fallbackErr.response?.status,
+                fallbackErr.response?.data
+              );
+            }
+            // If both endpoints fail, throw the fallback error
+            // (which will be caught by outer catch block with better error message)
+            throw fallbackErr;
+          }
+        } else {
+          throw err;
+        }
+      }
+
+      // Handle response - check if it's wrapped in success/data structure
+      const responseData = resp.data;
+      const updated = responseData?.data || responseData;
+      if (import.meta.env.DEV) {
+        console.log("[NodeProfile] Extracted node data:", updated);
+      }
+
+      // Update node data and form fields
+      const mergedData = { ...nodeData, ...updated };
+      setNodeData(mergedData);
+
+      // Regenerate form fields in case structure changed
+      const updatedFields = mapNodeProfileToFields(mergedData);
+      setFormFields(updatedFields);
+
+      // Update form values with new data
+      const updatedValues: Record<string, any> = {};
+      updatedFields.forEach((field) => {
+        const value = getNestedValue(mergedData, field.name);
+        updatedValues[field.name] = value ?? field.value ?? "";
+      });
+      setFormValues(updatedValues);
+
+      // Update selected node in the list
+      const updatedNodes = nodes.map((n) =>
+        n.id === selectedNode.id ? { ...n, ...updated } : n
+      );
+      setNodes(updatedNodes);
+      setSelectedNode({ ...selectedNode, ...updated });
+
+      toast.success("Node profile updated successfully!");
       setIsEditing(false);
-    } catch (err) {
-      console.error("Error saving changes:", err);
-      toast.error("Failed to save changes");
+    } catch (err: any) {
+      console.error("Error saving node:", err);
+      console.error("[NodeProfile] Full error details:", {
+        status: err.response?.status,
+        data: err.response?.data,
+        message: err.message,
+      });
+
+      if (err.response?.status === 401) {
+        logout();
+        toast.error("Session expired — please sign in again");
+      } else if (err.response?.status === 403) {
+        const errorMessage =
+          err.response?.data?.message ||
+          "You don't have permission to update this node. Please contact your administrator.";
+        toast.error(errorMessage);
+      } else {
+        const errorMessage =
+          err.response?.data?.message ||
+          err.message ||
+          "Failed to save node changes. Please try again.";
+        toast.error(errorMessage);
+      }
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleCancel = () => {
+    if (nodeData) {
+      // Reset form values to original node data
+      const resetValues: Record<string, any> = {};
+      formFields.forEach((field) => {
+        const value = getNestedValue(nodeData, field.name);
+        resetValues[field.name] = value ?? field.value ?? "";
+      });
+      setFormValues(resetValues);
+    }
+    setIsEditing(false);
   };
 
   if (loading) {
@@ -189,7 +311,16 @@ export default function NodeProfileClean() {
     );
   }
 
-  if (!selectedNode) {
+  if (!userId) {
+    return (
+      <div className="text-center text-gray-500 mt-10">
+        <Globe className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+        <p className="text-xl font-semibold">Please log in to view nodes</p>
+      </div>
+    );
+  }
+
+  if (nodes.length === 0) {
     return (
       <div className="text-center text-gray-500 mt-10">
         <Globe className="w-16 h-16 mx-auto text-gray-300 mb-4" />
@@ -201,9 +332,48 @@ export default function NodeProfileClean() {
     );
   }
 
+  if (!selectedNode || !nodeData) {
+    return (
+      <div className="text-center text-gray-500 mt-10">
+        <Globe className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+        <p className="text-xl font-semibold">Select a node to view details</p>
+      </div>
+    );
+  }
+
+  const nodeName = nodeData.name || selectedNode.name || "Church Name";
+  const nodeDescription = nodeData.structure?.description || "";
+  const levelName = nodeData.level?.name || "";
+  const dateOfEstablishment = nodeData.dateOfEstablishment
+    ? new Date(nodeData.dateOfEstablishment).toLocaleDateString()
+    : "";
+
   return (
     <div className="space-y-8">
-      {/* Church Header */}
+      {/* Node Selector */}
+      {nodes.length > 1 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Select Node
+          </label>
+          <select
+            value={selectedNode.id}
+            onChange={(e) => handleSelect(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            disabled={isEditing}>
+            {nodes.map((node) => (
+              <option key={node.id} value={node.id}>
+                {node.name ||
+                  node.structure?.name ||
+                  node.nodeId ||
+                  "Unnamed Node"}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Node Header */}
       <div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 rounded-xl p-6 border border-green-200 dark:border-green-800">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
@@ -217,25 +387,31 @@ export default function NodeProfileClean() {
             </div>
             <div>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                {formData.name || "Church Name"}
+                {nodeName}
               </h2>
-              <p className="text-gray-600 dark:text-gray-300">
-                {formData.description || "Church Description"}
-              </p>
+              {nodeDescription && (
+                <p className="text-gray-600 dark:text-gray-300">
+                  {nodeDescription}
+                </p>
+              )}
               <div className="flex items-center space-x-4 mt-2">
-                <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                  <Building className="w-4 h-4 mr-1" />
-                  {formData.level || "Church Level"}
-                </div>
-                <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                  <Calendar className="w-4 h-4 mr-1" />
-                  Established {formData.establishedDate || "Date"}
-                </div>
+                {levelName && (
+                  <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                    <Building className="w-4 h-4 mr-1" />
+                    {levelName}
+                  </div>
+                )}
+                {dateOfEstablishment && (
+                  <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                    <Calendar className="w-4 h-4 mr-1" />
+                    Established {dateOfEstablishment}
+                  </div>
+                )}
               </div>
             </div>
           </div>
           <button
-            onClick={() => setIsEditing(!isEditing)}
+            onClick={() => (isEditing ? handleCancel() : setIsEditing(true))}
             className="flex items-center px-4 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
             <Edit3 className="w-4 h-4 mr-2" />
             {isEditing ? "Cancel" : "Edit Profile"}
@@ -243,665 +419,19 @@ export default function NodeProfileClean() {
         </div>
       </div>
 
-      {/* Basic Information Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center mb-6">
-          <Building className="w-5 h-5 text-blue-600 dark:text-blue-400 mr-2" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Basic Information
-          </h3>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Church Name
-            </label>
-            <input
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              disabled={!isEditing}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Church Level
-            </label>
-            <select
-              name="level"
-              value={formData.level}
-              onChange={handleChange}
-              disabled={!isEditing}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed">
-              <option value="">Select church level</option>
-              <option value="headquarters">Headquarters</option>
-              <option value="regional">Regional</option>
-              <option value="district">District</option>
-              <option value="local">Local Church</option>
-              <option value="branch">Branch</option>
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Established Date
-            </label>
-            <input
-              type="date"
-              name="establishedDate"
-              value={formData.establishedDate}
-              onChange={handleChange}
-              disabled={!isEditing}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Registration Number
-            </label>
-            <input
-              type="text"
-              name="registrationNumber"
-              value={formData.registrationNumber}
-              onChange={handleChange}
-              disabled={!isEditing}
-              placeholder="Enter registration number"
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-            />
-          </div>
-        </div>
-
-        <div className="mt-6 space-y-2">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Description
-          </label>
-          <textarea
-            name="description"
-            value={formData.description}
-            onChange={handleChange}
-            disabled={!isEditing}
-            rows={4}
-            placeholder="Describe your church mission and vision..."
-            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed resize-none"
-          />
-        </div>
-      </div>
-
-      {/* Contact Information Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center mb-6">
-          <Phone className="w-5 h-5 text-green-600 dark:text-green-400 mr-2" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Contact Information
-          </h3>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Phone Number
-            </label>
-            <div className="relative">
-              <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="tel"
-                name="phone"
-                value={formData.phone}
-                onChange={handleChange}
-                disabled={!isEditing}
-                placeholder="Enter phone number"
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Email Address
-            </label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                disabled={!isEditing}
-                placeholder="Enter email address"
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Website
-            </label>
-            <input
-              type="url"
-              name="website"
-              value={formData.website}
-              onChange={handleChange}
-              disabled={!isEditing}
-              placeholder="https://yourchurch.com"
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Social Media
-            </label>
-            <input
-              type="text"
-              name="socialMedia"
-              value={formData.socialMedia}
-              onChange={handleChange}
-              disabled={!isEditing}
-              placeholder="Facebook, Instagram, etc."
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Address Information Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center mb-6">
-          <MapPin className="w-5 h-5 text-purple-600 dark:text-purple-400 mr-2" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Address Information
-          </h3>
-        </div>
-
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Street Address
-            </label>
-            <input
-              type="text"
-              name="address"
-              value={formData.address}
-              onChange={handleChange}
-              disabled={!isEditing}
-              placeholder="Enter street address"
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                City
-              </label>
-              <input
-                type="text"
-                name="city"
-                value={formData.city}
-                onChange={handleChange}
-                disabled={!isEditing}
-                placeholder="City"
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                State
-              </label>
-              <input
-                type="text"
-                name="state"
-                value={formData.state}
-                onChange={handleChange}
-                disabled={!isEditing}
-                placeholder="State"
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                ZIP Code
-              </label>
-              <input
-                type="text"
-                name="zipCode"
-                value={formData.zipCode}
-                onChange={handleChange}
-                disabled={!isEditing}
-                placeholder="ZIP Code"
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Country
-              </label>
-              <input
-                type="text"
-                name="country"
-                value={formData.country}
-                onChange={handleChange}
-                disabled={!isEditing}
-                placeholder="Country"
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Property Status Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center mb-6">
-          <Shield className="w-5 h-5 text-orange-600 dark:text-orange-400 mr-2" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Property Status
-          </h3>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Property Ownership
-            </label>
-            <select
-              name="propertyOwnership"
-              value={formData.propertyOwnership}
-              onChange={handleChange}
-              disabled={!isEditing}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed">
-              <option value="">Select ownership status</option>
-              <option value="owned">Owned</option>
-              <option value="leased">Leased</option>
-              <option value="rented">Rented</option>
-              <option value="shared">Shared</option>
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Property Size
-            </label>
-            <input
-              type="text"
-              name="propertySize"
-              value={formData.propertySize}
-              onChange={handleChange}
-              disabled={!isEditing}
-              placeholder="e.g., 5,000 sq ft"
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Property Value
-            </label>
-            <input
-              type="text"
-              name="propertyValue"
-              value={formData.propertyValue}
-              onChange={handleChange}
-              disabled={!isEditing}
-              placeholder="Estimated property value"
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Mortgage Status
-            </label>
-            <select
-              name="mortgageStatus"
-              value={formData.mortgageStatus}
-              onChange={handleChange}
-              disabled={!isEditing}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed">
-              <option value="">Select mortgage status</option>
-              <option value="paid-off">Paid Off</option>
-              <option value="mortgage">Has Mortgage</option>
-              <option value="no-mortgage">No Mortgage</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Legal Documents Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center mb-6">
-          <FileText className="w-5 h-5 text-red-600 dark:text-red-400 mr-2" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Legal Documents
-          </h3>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Registration Certificate
-            </label>
-            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
-              <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-              <label
-                htmlFor="registration-cert"
-                className="cursor-pointer text-blue-600 hover:text-blue-700 font-medium">
-                {formData.registrationCertificate
-                  ? formData.registrationCertificate.name
-                  : "Upload Registration Certificate"}
-              </label>
-              <input
-                id="registration-cert"
-                type="file"
-                onChange={(e) =>
-                  handleFileChange(
-                    "registrationCertificate",
-                    e.target.files?.[0] || null
-                  )
-                }
-                disabled={!isEditing}
-                className="hidden"
-                accept=".pdf,.doc,.docx"
-              />
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                PDF, DOC, DOCX files only
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Tax Exempt Status
-            </label>
-            <select
-              name="taxExemptStatus"
-              value={formData.taxExemptStatus}
-              onChange={handleChange}
-              disabled={!isEditing}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed">
-              <option value="">Select tax status</option>
-              <option value="exempt">Tax Exempt</option>
-              <option value="non-exempt">Non-Exempt</option>
-              <option value="pending">Pending</option>
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Insurance Policy
-            </label>
-            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
-              <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-              <label
-                htmlFor="insurance-policy"
-                className="cursor-pointer text-blue-600 hover:text-blue-700 font-medium">
-                {formData.insurancePolicy
-                  ? formData.insurancePolicy.name
-                  : "Upload Insurance Policy"}
-              </label>
-              <input
-                id="insurance-policy"
-                type="file"
-                onChange={(e) =>
-                  handleFileChange(
-                    "insurancePolicy",
-                    e.target.files?.[0] || null
-                  )
-                }
-                disabled={!isEditing}
-                className="hidden"
-                accept=".pdf,.doc,.docx"
-              />
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                PDF, DOC, DOCX files only
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Property Deed
-            </label>
-            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
-              <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-              <label
-                htmlFor="property-deed"
-                className="cursor-pointer text-blue-600 hover:text-blue-700 font-medium">
-                {formData.propertyDeed
-                  ? formData.propertyDeed.name
-                  : "Upload Property Deed"}
-              </label>
-              <input
-                id="property-deed"
-                type="file"
-                onChange={(e) =>
-                  handleFileChange("propertyDeed", e.target.files?.[0] || null)
-                }
-                disabled={!isEditing}
-                className="hidden"
-                accept=".pdf,.doc,.docx"
-              />
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                PDF, DOC, DOCX files only
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Organization Details Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center mb-6">
-          <Users className="w-5 h-5 text-indigo-600 dark:text-indigo-400 mr-2" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Organization Details
-          </h3>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Denomination
-            </label>
-            <input
-              type="text"
-              name="denomination"
-              value={formData.denomination}
-              onChange={handleChange}
-              disabled={!isEditing}
-              placeholder="e.g., Baptist, Methodist, etc."
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Church Type
-            </label>
-            <select
-              name="churchType"
-              value={formData.churchType}
-              onChange={handleChange}
-              disabled={!isEditing}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed">
-              <option value="">Select church type</option>
-              <option value="traditional">Traditional</option>
-              <option value="contemporary">Contemporary</option>
-              <option value="charismatic">Charismatic</option>
-              <option value="pentecostal">Pentecostal</option>
-              <option value="non-denominational">Non-Denominational</option>
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Membership Count
-            </label>
-            <input
-              type="number"
-              name="membershipCount"
-              value={formData.membershipCount}
-              onChange={handleChange}
-              disabled={!isEditing}
-              placeholder="Number of members"
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Staff Count
-            </label>
-            <input
-              type="number"
-              name="staffCount"
-              value={formData.staffCount}
-              onChange={handleChange}
-              disabled={!isEditing}
-              placeholder="Number of staff"
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Service Times
-            </label>
-            <input
-              type="text"
-              name="serviceTimes"
-              value={formData.serviceTimes}
-              onChange={handleChange}
-              disabled={!isEditing}
-              placeholder="e.g., Sunday 9AM, 11AM"
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Programs & Ministries
-            </label>
-            <input
-              type="text"
-              name="programs"
-              value={formData.programs}
-              onChange={handleChange}
-              disabled={!isEditing}
-              placeholder="e.g., Youth, Children, Seniors"
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Financial Information Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center mb-6">
-          <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400 mr-2" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Financial Information
-          </h3>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Annual Budget
-            </label>
-            <input
-              type="text"
-              name="annualBudget"
-              value={formData.annualBudget}
-              onChange={handleChange}
-              disabled={!isEditing}
-              placeholder="Annual budget amount"
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Funding Sources
-            </label>
-            <input
-              type="text"
-              name="fundingSources"
-              value={formData.fundingSources}
-              onChange={handleChange}
-              disabled={!isEditing}
-              placeholder="e.g., Tithes, Offerings, Grants"
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Monthly Donations
-            </label>
-            <input
-              type="text"
-              name="donations"
-              value={formData.donations}
-              onChange={handleChange}
-              disabled={!isEditing}
-              placeholder="Average monthly donations"
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* System Information Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center mb-6">
-          <AlertCircle className="w-5 h-5 text-gray-600 dark:text-gray-400 mr-2" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            System Information
-          </h3>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Node ID
-            </label>
-            <input
-              type="text"
-              value={formData.nodeId}
-              disabled
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Tenant ID
-            </label>
-            <input
-              type="text"
-              value={formData.tenantId}
-              disabled
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed"
-            />
-          </div>
-        </div>
-      </div>
+      {/* Dynamic Form */}
+      <DynamicFormRenderer
+        fields={formFields}
+        values={formValues}
+        onChange={handleFieldChange}
+        disabled={!isEditing}
+      />
 
       {/* Action Buttons */}
       {isEditing && (
         <div className="flex items-center justify-end space-x-4 pt-6 border-t border-gray-200 dark:border-gray-700">
           <button
-            onClick={() => setIsEditing(false)}
+            onClick={handleCancel}
             className="flex items-center px-6 py-3 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
             <X className="w-4 h-4 mr-2" />
             Cancel

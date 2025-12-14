@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { getLoginMode, setLoginMode, type LoginMode } from "../utils/loginMode";
+import { User, Shield } from "lucide-react";
 // We'll use login from AuthContext via useAuth()
 
 interface AuthModalProps {
@@ -15,9 +17,19 @@ const AuthModal: React.FC<AuthModalProps> = ({ open, onClose }) => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loginMode, setLoginModeState] = useState<LoginMode>(getLoginMode());
   // visibility handled by `open` prop; no separate internal visibility state needed
   const navigate = useNavigate();
   const { login } = useAuth();
+
+  // Update login mode when it changes
+  const handleModeChange = (mode: LoginMode) => {
+    setLoginModeState(mode);
+    setLoginMode(mode);
+    if (import.meta.env.DEV) {
+      console.log(`[AuthModal] Login mode changed to: ${mode}`);
+    }
+  };
 
   useEffect(() => {
     if (open) {
@@ -38,228 +50,184 @@ const AuthModal: React.FC<AuthModalProps> = ({ open, onClose }) => {
       navigate("/dashboard");
     } catch (err) {
       setLoading(false);
-      const message = err instanceof Error ? err.message : 'Login failed';
+      const message = err instanceof Error ? err.message : "Login failed";
       toast.error(message);
     }
   };
 
   if (!open) return null;
+
+  const isAdminMode = loginMode === "admin";
+
   return (
-    <AnimatePresence>
+    <AnimatePresence mode="wait">
+      {/* Simple overlay */}
       <motion.div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 backdrop-blur-md"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onClose}>
-        {/* Animated background elements */}
-        <div className="absolute inset-0 overflow-hidden">
-          <motion.div
-            className="absolute top-1/4 left-1/4 w-32 h-32 bg-gradient-to-br from-purple-200 to-pink-200 rounded-full opacity-30 blur-xl"
-            animate={{
-              scale: [1, 1.2, 1],
-              rotate: [0, 180, 360],
-            }}
-            transition={{
-              duration: 8,
-              repeat: Infinity,
-              ease: "linear",
-            }}
-          />
-          <motion.div
-            className="absolute bottom-1/4 right-1/4 w-24 h-24 bg-gradient-to-tr from-blue-200 to-purple-200 rounded-full opacity-30 blur-xl"
-            animate={{
-              scale: [1.2, 1, 1.2],
-              rotate: [360, 180, 0],
-            }}
-            transition={{
-              duration: 6,
-              repeat: Infinity,
-              ease: "linear",
-            }}
-          />
-        </div>
-
+        {/* Modal Card */}
         <motion.div
-          className="relative bg-white rounded-3xl shadow-2xl border border-gray-100 w-full max-w-md mx-4 p-8 overflow-hidden"
-          initial={{ scale: 0.8, opacity: 0, y: 50, rotateX: -15 }}
-          animate={{ scale: 1, opacity: 1, y: 0, rotateX: 0 }}
-          exit={{ scale: 0.8, opacity: 0, y: 50, rotateX: -15 }}
-          transition={{ duration: 0.4, ease: "easeOut" }}
+          key={loginMode}
+          className={`relative w-full max-w-md mx-4 p-8 rounded-xl ${
+            isAdminMode
+              ? "bg-slate-900 border border-slate-800"
+              : "bg-white border border-gray-200"
+          }`}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 10 }}
+          transition={{ duration: 0.2 }}
           onClick={(e) => e.stopPropagation()}>
-          {/* Decorative gradient border */}
-          <div className="absolute inset-0 bg-gradient-to-r from-purple-100/50 via-blue-100/50 to-purple-100/50 rounded-3xl -z-10" />
-
           {/* Close button */}
-          <motion.button
-            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl font-bold transition-colors duration-200 z-10"
+          <button
+            className={`absolute top-4 right-4 text-xl font-light transition-colors ${
+              isAdminMode
+                ? "text-slate-500 hover:text-slate-300"
+                : "text-gray-400 hover:text-gray-600"
+            }`}
             onClick={onClose}
-            aria-label="Close"
-            whileHover={{ scale: 1.1, rotate: 90 }}
-            whileTap={{ scale: 0.9 }}>
+            aria-label="Close">
             ×
-          </motion.button>
+          </button>
 
-          {/* Header */}
-          <motion.div
-            className="flex justify-center mb-8"
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.6 }}>
-            <div className="text-center">
-              <motion.div
-                className="w-20 h-20 bg-gradient-to-br from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center mb-4 mx-auto shadow-lg"
-                whileHover={{ rotate: 360, scale: 1.1 }}
-                transition={{ duration: 0.6 }}>
-                <motion.svg
-                  className="w-10 h-10 text-white"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ delay: 0.4, duration: 0.5, type: "spring" }}>
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                  />
-                </motion.svg>
-              </motion.div>
-              <motion.h2
-                className="text-3xl font-bold gradient-text"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.6, duration: 0.6 }}>
-                Welcome Back
-              </motion.h2>
-              <motion.p
-                className="text-gray-500 text-sm mt-2"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.8, duration: 0.6 }}>
-                Sign in to your account
-              </motion.p>
+          {/* Header - Simplified */}
+          <div className="text-center mb-6">
+            {isAdminMode ? (
+              <>
+                <div className="w-12 h-12 bg-slate-800 rounded-lg flex items-center justify-center mb-3 mx-auto">
+                  <Shield className="w-6 h-6 text-blue-400" />
+                </div>
+                <h2 className="text-xl font-semibold text-slate-100 mb-1">
+                  Admin Login
+                </h2>
+              </>
+            ) : (
+              <>
+                <div className="w-12 h-12 bg-purple-500 rounded-lg flex items-center justify-center mb-3 mx-auto">
+                  <User className="w-6 h-6 text-white" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900 mb-1">
+                  Sign In
+                </h2>
+              </>
+            )}
+          </div>
+
+          {/* Login Mode Toggle - Ultra Minimal */}
+          <div className="mb-6">
+            <div
+              className={`flex gap-1 p-0.5 rounded-lg ${
+                isAdminMode ? "bg-slate-800" : "bg-gray-100"
+              }`}>
+              <button
+                type="button"
+                onClick={() => handleModeChange("user")}
+                className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
+                  loginMode === "user"
+                    ? isAdminMode
+                      ? "bg-slate-700 text-purple-400"
+                      : "bg-white text-purple-600"
+                    : isAdminMode
+                    ? "text-slate-500 hover:text-slate-300"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}>
+                <User className="w-3 h-3" />
+                <span>User</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleModeChange("admin")}
+                className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
+                  loginMode === "admin"
+                    ? isAdminMode
+                      ? "bg-slate-700 text-blue-400"
+                      : "bg-white text-blue-600"
+                    : isAdminMode
+                    ? "text-slate-500 hover:text-slate-300"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}>
+                <Shield className="w-3 h-3" />
+                <span>Admin</span>
+              </button>
             </div>
-          </motion.div>
+          </div>
 
           {/* Form */}
-          <motion.form
-            key="login"
-            initial={{ opacity: 0, x: 40 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -40 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            className="space-y-6"
-            onSubmit={handleLogin}>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.9, duration: 0.6 }}>
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
-                Email Address
+          <form className="space-y-4" onSubmit={handleLogin}>
+            <div>
+              <label
+                className={`block text-xs font-medium mb-1.5 ${
+                  isAdminMode ? "text-slate-400" : "text-gray-600"
+                }`}>
+                Email
               </label>
-              <motion.input
+              <input
                 type="email"
                 required
-                className="w-full px-4 py-4 border border-gray-200 rounded-xl bg-white/50 backdrop-blur-sm text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent placeholder:text-gray-400 transition-all duration-200"
-                placeholder="Enter your email"
+                className={`w-full px-3 py-2.5 rounded-lg border text-sm ${
+                  isAdminMode
+                    ? "bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-600 focus:border-blue-500 focus:outline-none"
+                    : "bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-purple-500 focus:outline-none"
+                }`}
+                placeholder="your@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                whileFocus={{ scale: 1.02 }}
               />
-            </motion.div>
+            </div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1.1, duration: 0.6 }}>
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
+            <div>
+              <label
+                className={`block text-xs font-medium mb-1.5 ${
+                  isAdminMode ? "text-slate-400" : "text-gray-600"
+                }`}>
                 Password
               </label>
-              <motion.input
+              <input
                 type="password"
                 required
-                className="w-full px-4 py-4 border border-gray-200 rounded-xl bg-white/50 backdrop-blur-sm text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent placeholder:text-gray-400 transition-all duration-200"
-                placeholder="Enter your password"
+                className={`w-full px-3 py-2.5 rounded-lg border text-sm ${
+                  isAdminMode
+                    ? "bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-600 focus:border-blue-500 focus:outline-none"
+                    : "bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-purple-500 focus:outline-none"
+                }`}
+                placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                whileFocus={{ scale: 1.02 }}
               />
-            </motion.div>
+            </div>
 
-            <AnimatePresence>
-              {error && (
-                <motion.div
-                  className="text-red-500 text-sm bg-red-50 border border-red-200 rounded-lg p-3"
-                  initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                  transition={{ duration: 0.3 }}>
-                  {error}
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {error && (
+              <div
+                className={`text-xs rounded p-2 border ${
+                  isAdminMode
+                    ? "text-red-400 bg-red-950/20 border-red-800/30"
+                    : "text-red-600 bg-red-50 border-red-200"
+                }`}>
+                {error}
+              </div>
+            )}
 
-            <motion.button
+            <button
               type="submit"
-              className="w-full py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden"
               disabled={loading}
-              whileHover={{ y: -2 }}
-              whileTap={{ scale: 0.98 }}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1.3, duration: 0.6 }}>
-              {/* Animated background */}
-              <motion.div
-                className="absolute inset-0 bg-gradient-to-r from-purple-700 to-blue-700"
-                initial={{ x: "-100%" }}
-                whileHover={{ x: "0%" }}
-                transition={{ duration: 0.3 }}
-              />
-              <span className="relative z-10">
-                {loading ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <motion.div
-                      className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
-                      animate={{ rotate: 360 }}
-                      transition={{
-                        duration: 1,
-                        repeat: Infinity,
-                        ease: "linear",
-                      }}
-                    />
-                    Signing in...
-                  </div>
-                ) : (
-                  'Sign In'
-                )}
-              </span>
-            </motion.button>
-          </motion.form>
-
-          {/* Footer */}
-          <motion.div
-            className="mt-6 text-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1.5, duration: 0.6 }}>
-            <p className="text-xs text-gray-500">
-              By signing in, you agree to our{" "}
-              <a
-                href="#"
-                className="text-purple-600 hover:text-purple-700 font-medium transition-colors">
-                Terms of Service
-              </a>{" "}
-              and{" "}
-              <a
-                href="#"
-                className="text-purple-600 hover:text-purple-700 font-medium transition-colors">
-                Privacy Policy
-              </a>
-            </p>
-          </motion.div>
+              className={`w-full py-2.5 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                isAdminMode
+                  ? "bg-blue-600 hover:bg-blue-700"
+                  : "bg-purple-600 hover:bg-purple-700"
+              }`}>
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Signing in...
+                </span>
+              ) : (
+                "Sign In"
+              )}
+            </button>
+          </form>
         </motion.div>
       </motion.div>
     </AnimatePresence>

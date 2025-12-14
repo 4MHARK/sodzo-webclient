@@ -201,7 +201,9 @@ export default function FormRenderer() {
       // Mock API call
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
+      if (import.meta.env.DEV) {
       console.log("Form submitted:", formValues);
+      }
       setIsSubmitted(true);
       toast.success("Form submitted successfully!");
 

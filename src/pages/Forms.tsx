@@ -92,8 +92,7 @@ export default function Forms() {
                   activeFormId === f.projectId
                     ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md scale-[1.02]"
                     : "bg-gray-100 hover:bg-gray-200 text-gray-700"
-                }`}
-            >
+                }`}>
               {f.configuration?.projectName || "Untitled Form"}
               {activeFormId === f.projectId && (
                 <span className="ml-2 text-sm opacity-80">●</span>
@@ -125,8 +124,7 @@ export default function Forms() {
                     return (
                       <h2
                         key={id}
-                        className="text-xl font-bold text-center text-gray-700 mb-4"
-                      >
+                        className="text-xl font-bold text-center text-gray-700 mb-4">
                         {properties.label}
                       </h2>
                     );
@@ -172,8 +170,7 @@ export default function Forms() {
                         <select
                           value={values[id] || ""}
                           onChange={(e) => handleChange(id, e.target.value)}
-                          className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
-                        >
+                          className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50">
                           <option value="">Select...</option>
                           {properties.options?.map((opt) => (
                             <option key={opt} value={opt}>
@@ -206,9 +203,12 @@ export default function Forms() {
 
               <button
                 type="button"
-                onClick={() => console.log("Form values:", values)}
-                className="w-full mt-8 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-3 rounded-xl transition-all duration-300 shadow-md"
-              >
+                onClick={() => {
+                  if (import.meta.env.DEV) {
+                    console.log("Form values:", values);
+                  }
+                }}
+                className="w-full mt-8 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-3 rounded-xl transition-all duration-300 shadow-md">
                 Save (Logs values for now)
               </button>
             </div>
