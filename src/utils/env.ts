@@ -1,7 +1,7 @@
 // Environment configuration utilities
 export const ENV_CONFIG = {
   // Application settings
-  APP_NAME: import.meta.env.VITE_APP_NAME || "Sword of the Spirit Ministries",
+  APP_NAME: import.meta.env.VITE_APP_NAME || "The Sword of the Spirit Ministries",
   APP_VERSION: import.meta.env.VITE_APP_VERSION || "1.0.0",
   APP_ENV: import.meta.env.VITE_APP_ENV || "development",
   DEFAULT_THEME: import.meta.env.VITE_DEFAULT_THEME || "light",
