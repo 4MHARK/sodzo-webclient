@@ -113,6 +113,7 @@ jobs:
         uses: webfactory/ssh-agent@v0.7.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+        continue-on-error: true
 
       - name: 🚀 Deploy to Unified Staging VM
         run: |
@@ -152,9 +153,17 @@ jobs:
         uses: webfactory/ssh-agent@v0.7.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+        continue-on-error: true
 
       - name: 🚀 Deploy to Unified Production VM
         run: |
+          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ] || [ -z "${{ secrets.NEW_STAGING_IP }}" ]; then
+            echo "⚠️ SSH secrets not configured. Skipping deployment."
+            echo "Please add SSH_PRIVATE_KEY and NEW_STAGING_IP secrets to the repository."
+            echo "Image built successfully: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production"
+            exit 0
+          fi
+          
           echo "🚀 Deploying webclient to UNIFIED Production VM"
           echo "🌿 Branch: ${{ github.ref }}"
           echo "🐳 Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production"
