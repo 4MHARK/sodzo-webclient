@@ -124,7 +124,12 @@ jobs:
             cd /opt/saby
             
             echo "🔐 Logging in to GHCR..."
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            if [ -n "${{ secrets.GHCR_PAT }}" ]; then
+              echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u fadebowaley --password-stdin
+            else
+              echo "⚠️ GHCR_PAT not set, trying without authentication (may fail if package is private)"
+              echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin || true
+            fi
             
             echo "📥 Pulling latest webclient image (no cache)..."
             docker-compose -f docker-compose.staging.yml pull --no-parallel webclient || echo "WebClient not in staging compose yet"
@@ -159,7 +164,12 @@ jobs:
             cd /opt/saby
             
             echo "🔐 Logging in to GHCR..."
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            if [ -n "${{ secrets.GHCR_PAT }}" ]; then
+              echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u fadebowaley --password-stdin
+            else
+              echo "⚠️ GHCR_PAT not set, trying without authentication (may fail if package is private)"
+              echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin || true
+            fi
             
             echo "📥 Pulling latest webclient image (no cache)..."
             docker-compose -f docker-compose.production.yml pull --no-parallel webclient
