@@ -1,0 +1,195 @@
+name: WebClient CI/CD Pipeline - Unified VM
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to deploy to"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+          - proddy
+  push:
+    branches: [Alpha, production, staging, proddy]
+  pull_request:
+    branches: [Alpha, production, staging, proddy]
+
+env:
+  NODE_VERSION: "18"
+  REGISTRY: ghcr.io
+  IMAGE_NAME: fadebowaley/sabywebclient
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  # ═══════════════════════════════════════════════════════════════════
+  # BUILD, TEST & PUSH
+  # ═══════════════════════════════════════════════════════════════════
+  build-test-docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Determine build environment
+        id: build-env
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/proddy" ]] || [[ "${{ github.ref }}" == "refs/heads/production" ]]; then
+            echo "ENVIRONMENT=production" >> $GITHUB_OUTPUT
+            echo "VITE_API_BASE=https://api.saby.ai/v1" >> $GITHUB_OUTPUT
+            echo "IMAGE_TAG=production" >> $GITHUB_OUTPUT
+          else
+            echo "ENVIRONMENT=staging" >> $GITHUB_OUTPUT
+            echo "VITE_API_BASE=https://api-dev.saby.ai/v1" >> $GITHUB_OUTPUT
+            echo "IMAGE_TAG=staging" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build application
+        run: |
+          echo "=== BUILDING FOR ${{ steps.build-env.outputs.ENVIRONMENT }} ==="
+          VITE_API_BASE="${{ steps.build-env.outputs.VITE_API_BASE }}" \
+          npm run build
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: fadebowaley
+          password: ${{ secrets.GHCR_PAT }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=${{ steps.build-env.outputs.IMAGE_TAG }},enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+          build-args: |
+            VITE_API_BASE=${{ steps.build-env.outputs.VITE_API_BASE }}
+
+  # ═══════════════════════════════════════════════════════════════════
+  # DEPLOY TO UNIFIED STAGING VM
+  # ═══════════════════════════════════════════════════════════════════
+  deploy-staging:
+    needs: build-test-docker
+    runs-on: ubuntu-latest
+    if: |
+      github.ref == 'refs/heads/Alpha' ||
+      github.ref == 'refs/heads/staging' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    steps:
+      - name: 🔐 Setup SSH
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: 🚀 Deploy to Unified Staging VM
+        run: |
+          echo "🚀 Deploying webclient to UNIFIED Staging VM"
+          echo "🐳 Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:staging"
+
+          ssh -o StrictHostKeyChecking=no haloadmin@${{ secrets.NEW_STAGING_IP }} << 'ENDSSH'
+            set -e
+            cd /opt/saby
+            
+            echo "🔐 Logging in to GHCR..."
+            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u fadebowaley --password-stdin
+            
+            echo "📥 Pulling latest webclient image (no cache)..."
+            docker-compose -f docker-compose.staging.yml pull --no-parallel webclient || echo "WebClient not in staging compose yet"
+            
+            echo "✅ WebClient deployment completed!"
+          ENDSSH
+
+  # ═══════════════════════════════════════════════════════════════════
+  # DEPLOY TO UNIFIED PRODUCTION VM
+  # ═══════════════════════════════════════════════════════════════════
+  deploy-production:
+    needs: build-test-docker
+    runs-on: ubuntu-latest
+    if: |
+      github.ref == 'refs/heads/proddy' ||
+      github.ref == 'refs/heads/production' ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.environment == 'production' || github.event.inputs.environment == 'proddy'))
+    steps:
+      - name: 🔐 Setup SSH
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: 🚀 Deploy to Unified Production VM
+        run: |
+          echo "🚀 Deploying webclient to UNIFIED Production VM"
+          echo "🌿 Branch: ${{ github.ref }}"
+          echo "🐳 Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production"
+
+          ssh -o StrictHostKeyChecking=no haloadmin@${{ secrets.NEW_STAGING_IP }} << 'ENDSSH'
+            set -e
+            cd /opt/saby
+            
+            echo "🔐 Logging in to GHCR..."
+            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u fadebowaley --password-stdin
+            
+            echo "📥 Pulling latest webclient image (no cache)..."
+            docker-compose -f docker-compose.production.yml pull --no-parallel webclient
+            
+            echo "🛑 Stopping old webclient container..."
+            docker-compose -f docker-compose.production.yml stop webclient || true
+            
+            echo "🗑️ Removing old webclient container..."
+            docker-compose -f docker-compose.production.yml rm -f webclient || true
+            
+            echo "🚀 Starting new webclient container..."
+            docker-compose -f docker-compose.production.yml up -d --force-recreate webclient
+            
+            echo "⏳ Waiting for webclient to start..."
+            sleep 15
+            
+            echo "🏥 Health check..."
+            docker-compose -f docker-compose.production.yml ps webclient
+            
+            echo "📊 Testing webclient endpoint..."
+            curl -I http://localhost:3001 || echo "⚠️ WebClient not responding yet, may need more time"
+            
+            echo "📝 Recent logs:"
+            docker logs saby-webclient-app --tail 20 || true
+            
+            echo "✅ WebClient deployment completed!"
+          ENDSSH
+
+      - name: ✅ Deployment Summary
+        run: |
+          echo "✅ WebClient deployed to unified production VM"
+          echo "🌐 Accessible at: https://web.saby.ai"
+
