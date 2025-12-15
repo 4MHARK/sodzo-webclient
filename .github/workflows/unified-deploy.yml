@@ -117,17 +117,19 @@ jobs:
           fi
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/ssh_key
           chmod 600 /tmp/ssh_key
+          eval "$(ssh-agent -s)"
+          ssh-add /tmp/ssh_key
 
       - name: 🔐 Test SSH connectivity (staging)
         run: |
-          ssh -o StrictHostKeyChecking=no -i /tmp/ssh_key haloadmin@${{ secrets.NEW_STAGING_IP }} "echo 'SSH OK to staging'" || exit 1
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null haloadmin@${{ secrets.NEW_STAGING_IP }} "echo 'SSH OK to staging'" || exit 1
 
       - name: 🚀 Deploy to Unified Staging VM
         run: |
           echo "🚀 Deploying webclient to UNIFIED Staging VM"
           echo "🐳 Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:staging"
 
-          ssh -o StrictHostKeyChecking=no -i /tmp/ssh_key haloadmin@${{ secrets.NEW_STAGING_IP }} << 'ENDSSH'
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null haloadmin@${{ secrets.NEW_STAGING_IP }} << 'ENDSSH'
             set -e
             cd /opt/saby
             
@@ -177,10 +179,12 @@ jobs:
           fi
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/ssh_key
           chmod 600 /tmp/ssh_key
+          eval "$(ssh-agent -s)"
+          ssh-add /tmp/ssh_key
 
       - name: 🔐 Test SSH connectivity (production)
         run: |
-          ssh -o StrictHostKeyChecking=no -i /tmp/ssh_key haloadmin@${{ secrets.NEW_STAGING_IP }} "echo 'SSH OK to production host'" || exit 1
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null haloadmin@${{ secrets.NEW_STAGING_IP }} "echo 'SSH OK to production host'" || exit 1
 
       - name: 🚀 Deploy to Unified Production VM
         run: |
@@ -188,7 +192,7 @@ jobs:
           echo "🌿 Branch: ${{ github.ref }}"
           echo "🐳 Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production"
 
-          ssh -o StrictHostKeyChecking=no -i /tmp/ssh_key haloadmin@${{ secrets.NEW_STAGING_IP }} << 'ENDSSH'
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null haloadmin@${{ secrets.NEW_STAGING_IP }} << 'ENDSSH'
             set -e
             cd /opt/saby
             
