@@ -115,21 +115,30 @@ jobs:
             echo "❌ SSH secrets not configured. Add SSH_PRIVATE_KEY and NEW_STAGING_IP."
             exit 1
           fi
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/ssh_key
+          # Write key with trailing newline preserved
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/ssh_key
           chmod 600 /tmp/ssh_key
           eval "$(ssh-agent -s)"
           ssh-add /tmp/ssh_key
 
-      - name: 🔐 Test SSH connectivity (staging)
+      - name: 🔐 Test SSH connectivity (staging, debug)
         run: |
-          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null haloadmin@${{ secrets.NEW_STAGING_IP }} "echo 'SSH OK to staging'" || exit 1
+          ssh -vvv -i /tmp/ssh_key \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            haloadmin@${{ secrets.NEW_STAGING_IP }} "echo 'SSH OK to staging'" || exit 1
 
       - name: 🚀 Deploy to Unified Staging VM
         run: |
           echo "🚀 Deploying webclient to UNIFIED Staging VM"
           echo "🐳 Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:staging"
 
-          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null haloadmin@${{ secrets.NEW_STAGING_IP }} << 'ENDSSH'
+          ssh -i /tmp/ssh_key \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            haloadmin@${{ secrets.NEW_STAGING_IP }} << 'ENDSSH'
             set -e
             cd /opt/saby
             
@@ -177,7 +186,7 @@ jobs:
             echo "❌ SSH secrets not configured. Add SSH_PRIVATE_KEY and NEW_STAGING_IP."
             exit 1
           fi
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/ssh_key
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/ssh_key
           chmod 600 /tmp/ssh_key
           eval "$(ssh-agent -s)"
           ssh-add /tmp/ssh_key
@@ -192,7 +201,11 @@ jobs:
           echo "🌿 Branch: ${{ github.ref }}"
           echo "🐳 Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production"
 
-          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null haloadmin@${{ secrets.NEW_STAGING_IP }} << 'ENDSSH'
+          ssh -i /tmp/ssh_key \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            haloadmin@${{ secrets.NEW_STAGING_IP }} << 'ENDSSH'
             set -e
             cd /opt/saby
             
