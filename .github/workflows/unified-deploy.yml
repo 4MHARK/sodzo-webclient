@@ -82,7 +82,7 @@ jobs:
             type=ref,event=branch
             type=ref,event=pr
             type=sha,prefix={{branch}}-
-            type=raw,value=${{ steps.build-env.outputs.IMAGE_TAG }},enable={{is_default_branch}}
+            type=raw,value=${{ steps.build-env.outputs.IMAGE_TAG }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -135,8 +135,8 @@ jobs:
             if [ -n "${{ secrets.GHCR_PAT }}" ]; then
               echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u fadebowaley --password-stdin
             else
-              echo "⚠️ GHCR_PAT not set, trying without authentication (may fail if package is private)"
-              echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin || true
+              echo "⚠️ GHCR_PAT not set, using GITHUB_TOKEN..."
+              echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin || echo "⚠️ Login failed, trying to pull anyway..."
             fi
             
             echo "📥 Pulling latest webclient image (no cache)..."
@@ -183,27 +183,27 @@ jobs:
             if [ -n "${{ secrets.GHCR_PAT }}" ]; then
               echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u fadebowaley --password-stdin
             else
-              echo "⚠️ GHCR_PAT not set, trying without authentication (may fail if package is private)"
-              echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin || true
+              echo "⚠️ GHCR_PAT not set, using GITHUB_TOKEN..."
+              echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin || echo "⚠️ Login failed, trying to pull anyway..."
             fi
             
             echo "📥 Pulling latest webclient image (no cache)..."
-            docker-compose -f docker-compose.production.yml pull --no-parallel webclient
+            COMPOSE_PROJECT_NAME=saby-production docker-compose -f docker-compose.production.yml pull --no-parallel webclient
             
             echo "🛑 Stopping old webclient container..."
-            docker-compose -f docker-compose.production.yml stop webclient || true
+            COMPOSE_PROJECT_NAME=saby-production docker-compose -f docker-compose.production.yml stop webclient || true
             
             echo "🗑️ Removing old webclient container..."
-            docker-compose -f docker-compose.production.yml rm -f webclient || true
+            COMPOSE_PROJECT_NAME=saby-production docker-compose -f docker-compose.production.yml rm -f webclient || true
             
             echo "🚀 Starting new webclient container..."
-            docker-compose -f docker-compose.production.yml up -d --force-recreate webclient
+            COMPOSE_PROJECT_NAME=saby-production docker-compose -f docker-compose.production.yml up -d --force-recreate webclient
             
             echo "⏳ Waiting for webclient to start..."
             sleep 15
             
             echo "🏥 Health check..."
-            docker-compose -f docker-compose.production.yml ps webclient
+            COMPOSE_PROJECT_NAME=saby-production docker-compose -f docker-compose.production.yml ps webclient
             
             echo "📊 Testing webclient endpoint..."
             curl -I http://localhost:3001 || echo "⚠️ WebClient not responding yet, may need more time"
