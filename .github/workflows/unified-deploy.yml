@@ -109,22 +109,25 @@ jobs:
       github.ref == 'refs/heads/staging' ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
     steps:
-      - name: 🔐 Setup SSH
-        uses: webfactory/ssh-agent@v0.7.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      - name: 🚀 Deploy to Unified Staging VM
+      - name: 🔐 Prepare SSH key
         run: |
           if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ] || [ -z "${{ secrets.NEW_STAGING_IP }}" ]; then
             echo "❌ SSH secrets not configured. Add SSH_PRIVATE_KEY and NEW_STAGING_IP."
             exit 1
           fi
-          
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/ssh_key
+          chmod 600 /tmp/ssh_key
+
+      - name: 🔐 Test SSH connectivity (staging)
+        run: |
+          ssh -o StrictHostKeyChecking=no -i /tmp/ssh_key haloadmin@${{ secrets.NEW_STAGING_IP }} "echo 'SSH OK to staging'" || exit 1
+
+      - name: 🚀 Deploy to Unified Staging VM
+        run: |
           echo "🚀 Deploying webclient to UNIFIED Staging VM"
           echo "🐳 Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:staging"
 
-          ssh -o StrictHostKeyChecking=no haloadmin@${{ secrets.NEW_STAGING_IP }} << 'ENDSSH'
+          ssh -o StrictHostKeyChecking=no -i /tmp/ssh_key haloadmin@${{ secrets.NEW_STAGING_IP }} << 'ENDSSH'
             set -e
             cd /opt/saby
             
@@ -166,23 +169,26 @@ jobs:
       github.ref == 'refs/heads/production' ||
       (github.event_name == 'workflow_dispatch' && (github.event.inputs.environment == 'production' || github.event.inputs.environment == 'proddy'))
     steps:
-      - name: 🔐 Setup SSH
-        uses: webfactory/ssh-agent@v0.7.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      - name: 🚀 Deploy to Unified Production VM
+      - name: 🔐 Prepare SSH key
         run: |
           if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ] || [ -z "${{ secrets.NEW_STAGING_IP }}" ]; then
             echo "❌ SSH secrets not configured. Add SSH_PRIVATE_KEY and NEW_STAGING_IP."
             exit 1
           fi
-          
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/ssh_key
+          chmod 600 /tmp/ssh_key
+
+      - name: 🔐 Test SSH connectivity (production)
+        run: |
+          ssh -o StrictHostKeyChecking=no -i /tmp/ssh_key haloadmin@${{ secrets.NEW_STAGING_IP }} "echo 'SSH OK to production host'" || exit 1
+
+      - name: 🚀 Deploy to Unified Production VM
+        run: |
           echo "🚀 Deploying webclient to UNIFIED Production VM"
           echo "🌿 Branch: ${{ github.ref }}"
           echo "🐳 Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production"
 
-          ssh -o StrictHostKeyChecking=no haloadmin@${{ secrets.NEW_STAGING_IP }} << 'ENDSSH'
+          ssh -o StrictHostKeyChecking=no -i /tmp/ssh_key haloadmin@${{ secrets.NEW_STAGING_IP }} << 'ENDSSH'
             set -e
             cd /opt/saby
             
