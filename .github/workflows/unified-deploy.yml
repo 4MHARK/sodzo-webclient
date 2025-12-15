@@ -117,6 +117,13 @@ jobs:
 
       - name: 🚀 Deploy to Unified Staging VM
         run: |
+          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ] || [ -z "${{ secrets.NEW_STAGING_IP }}" ]; then
+            echo "⚠️ SSH secrets not configured. Skipping deployment."
+            echo "Please add SSH_PRIVATE_KEY and NEW_STAGING_IP secrets to the repository."
+            echo "Image built successfully: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:staging"
+            exit 0
+          fi
+          
           echo "🚀 Deploying webclient to UNIFIED Staging VM"
           echo "🐳 Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:staging"
 
