@@ -193,7 +193,11 @@ jobs:
 
       - name: 🔐 Test SSH connectivity (production)
         run: |
-          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null haloadmin@${{ secrets.NEW_STAGING_IP }} "echo 'SSH OK to production host'" || exit 1
+          ssh -vvv -i /tmp/ssh_key \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            haloadmin@${{ secrets.NEW_STAGING_IP }} "echo 'SSH OK to production host'" || exit 1
 
       - name: 🚀 Deploy to Unified Production VM
         run: |
