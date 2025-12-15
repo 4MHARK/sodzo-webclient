@@ -113,15 +113,12 @@ jobs:
         uses: webfactory/ssh-agent@v0.7.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-        continue-on-error: true
 
       - name: 🚀 Deploy to Unified Staging VM
         run: |
           if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ] || [ -z "${{ secrets.NEW_STAGING_IP }}" ]; then
-            echo "⚠️ SSH secrets not configured. Skipping deployment."
-            echo "Please add SSH_PRIVATE_KEY and NEW_STAGING_IP secrets to the repository."
-            echo "Image built successfully: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:staging"
-            exit 0
+            echo "❌ SSH secrets not configured. Add SSH_PRIVATE_KEY and NEW_STAGING_IP."
+            exit 1
           fi
           
           echo "🚀 Deploying webclient to UNIFIED Staging VM"
@@ -136,13 +133,26 @@ jobs:
               echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u fadebowaley --password-stdin
             else
               echo "⚠️ GHCR_PAT not set, using GITHUB_TOKEN..."
-              echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin || echo "⚠️ Login failed, trying to pull anyway..."
+              echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             fi
             
             echo "📥 Pulling latest webclient image (no cache)..."
-            docker-compose -f docker-compose.staging.yml pull --no-parallel webclient || echo "WebClient not in staging compose yet"
+            COMPOSE_PROJECT_NAME=saby-staging docker-compose -f docker-compose.staging.yml pull --no-parallel webclient
             
-            echo "✅ WebClient deployment completed!"
+            echo "🛑 Stopping old webclient container..."
+            COMPOSE_PROJECT_NAME=saby-staging docker-compose -f docker-compose.staging.yml stop webclient || true
+            
+            echo "🗑️ Removing old webclient container..."
+            COMPOSE_PROJECT_NAME=saby-staging docker-compose -f docker-compose.staging.yml rm -f webclient || true
+            
+            echo "🚀 Starting new webclient container..."
+            COMPOSE_PROJECT_NAME=saby-staging docker-compose -f docker-compose.staging.yml up -d --force-recreate webclient
+            
+            echo "⏳ Waiting for webclient to start..."
+            sleep 15
+            
+            echo "🏥 Health check..."
+            COMPOSE_PROJECT_NAME=saby-staging docker-compose -f docker-compose.staging.yml ps webclient
           ENDSSH
 
   # ═══════════════════════════════════════════════════════════════════
@@ -160,15 +170,12 @@ jobs:
         uses: webfactory/ssh-agent@v0.7.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-        continue-on-error: true
 
       - name: 🚀 Deploy to Unified Production VM
         run: |
           if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ] || [ -z "${{ secrets.NEW_STAGING_IP }}" ]; then
-            echo "⚠️ SSH secrets not configured. Skipping deployment."
-            echo "Please add SSH_PRIVATE_KEY and NEW_STAGING_IP secrets to the repository."
-            echo "Image built successfully: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production"
-            exit 0
+            echo "❌ SSH secrets not configured. Add SSH_PRIVATE_KEY and NEW_STAGING_IP."
+            exit 1
           fi
           
           echo "🚀 Deploying webclient to UNIFIED Production VM"
@@ -184,7 +191,7 @@ jobs:
               echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u fadebowaley --password-stdin
             else
               echo "⚠️ GHCR_PAT not set, using GITHUB_TOKEN..."
-              echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin || echo "⚠️ Login failed, trying to pull anyway..."
+              echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             fi
             
             echo "📥 Pulling latest webclient image (no cache)..."
