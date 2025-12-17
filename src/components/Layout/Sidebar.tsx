@@ -109,14 +109,14 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                 transition={{ type: "spring", stiffness: 400, damping: 10 }}>
                 <img
                   src="/logo.png"
-                  alt="Sword of the Spirit Ministries Logo"
+                  alt="The Sword of the Spirit Ministries Logo"
                   className="w-auto h-12 object-cover"
                 />
               </motion.div>
 
               {/* Ministry Name */}
               <span className="text-sm md:text-sm font-bold text-gray-900 dark:text-white tracking-wide">
-                Sword of the Spirit Ministries
+                The Sword of the Spirit Ministries
               </span>
             </div>
           </motion.div>
@@ -133,16 +133,16 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                   return true;
                 })
                 .map((item, index) => {
-                const isActive = location.pathname === item.href;
-                return (
-                  <motion.div
-                    key={item.name}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.1 + index * 0.05 }}>
-                    <Link
-                      to={item.href}
-                      className={`
+                  const isActive = location.pathname === item.href;
+                  return (
+                    <motion.div
+                      key={item.name}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.1 + index * 0.05 }}>
+                      <Link
+                        to={item.href}
+                        className={`
                         flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200
                         ${
                           isActive
@@ -150,17 +150,17 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                             : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white"
                         }
                       `}
-                      onClick={onClose}>
-                      <motion.div
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.95 }}>
-                        <item.icon className="w-5 h-5 mr-3" />
-                      </motion.div>
-                      {item.name}
-                    </Link>
-                  </motion.div>
-                );
-              })}
+                        onClick={onClose}>
+                        <motion.div
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.95 }}>
+                          <item.icon className="w-5 h-5 mr-3" />
+                        </motion.div>
+                        {item.name}
+                      </Link>
+                    </motion.div>
+                  );
+                })}
             </div>
 
             {/* Future Features

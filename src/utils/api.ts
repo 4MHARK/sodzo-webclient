@@ -13,7 +13,7 @@ import { getLoginModeSync, shouldAddApiKeyToLogin } from "./loginMode";
 // so the Vite proxy forwards requests to the staging API and avoids CORS.
 export const API_BASE =
   (import.meta.env.VITE_API_BASE as string) ??
-  (import.meta.env.DEV ? "/v1" : "https://api.saby.ai/v1");
+  (import.meta.env.DEV ? "/v1" : "https://api.stg.saby.ai/v1");
 
 // API Endpoints from environment variables
 export const API_ENDPOINTS = {
