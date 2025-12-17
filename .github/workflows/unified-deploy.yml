@@ -49,7 +49,7 @@ jobs:
         run: |
           if [[ "${{ github.ref }}" == "refs/heads/proddy" ]] || [[ "${{ github.ref }}" == "refs/heads/production" ]]; then
             echo "ENVIRONMENT=production" >> $GITHUB_OUTPUT
-            echo "VITE_API_BASE=https://api.saby.ai/v1" >> $GITHUB_OUTPUT
+            echo "VITE_API_BASE=https://api.stg.saby.ai/v1" >> $GITHUB_OUTPUT
             echo "IMAGE_TAG=production" >> $GITHUB_OUTPUT
           else
             echo "ENVIRONMENT=staging" >> $GITHUB_OUTPUT
