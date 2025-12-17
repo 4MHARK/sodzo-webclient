@@ -101,13 +101,11 @@ jobs:
   # ═══════════════════════════════════════════════════════════════════
   # DEPLOY TO UNIFIED STAGING VM
   # ═══════════════════════════════════════════════════════════════════
+  # DISABLED: Staging deployment is disabled - only production deployments are active
   deploy-staging:
     needs: build-test-docker
     runs-on: ubuntu-latest
-    if: |
-      github.ref == 'refs/heads/Alpha' ||
-      github.ref == 'refs/heads/staging' ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    if: false  # Staging deployment disabled
     steps:
       - name: 🔐 Prepare SSH key
         run: |
