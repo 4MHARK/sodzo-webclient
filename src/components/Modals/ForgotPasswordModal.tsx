@@ -90,8 +90,11 @@ export default function ForgotPasswordModal({
 
     setLoading(true);
     try {
-      // Use resend-otp endpoint for password reset flow
-      await axios.post(`${API_BASE}/auth/resend-otp`, { email });
+      // Use resend-otp endpoint with password-reset purpose for verified users
+      await axios.post(`${API_BASE}/auth/resend-otp`, {
+        email,
+        purpose: "password-reset", // Allow verified users to receive OTP for password reset
+      });
       setStep("otp");
       setCountdown(60);
       toast.success("Verification code sent to your email");
@@ -214,7 +217,10 @@ export default function ForgotPasswordModal({
 
     setResending(true);
     try {
-      await axios.post(`${API_BASE}/auth/resend-otp`, { email });
+      await axios.post(`${API_BASE}/auth/resend-otp`, {
+        email,
+        purpose: "password-reset", // Allow verified users to receive OTP for password reset
+      });
       setCountdown(60);
       toast.success("Verification code resent!");
     } catch (err: any) {

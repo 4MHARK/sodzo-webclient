@@ -231,12 +231,12 @@ export default function EmailPhoneChangeModal({
 
     setLoading(true);
     try {
-      // Update email/phone
+      // Update email/phone - OTP already verified in previous step
       const endpoint =
         type === "email" ? "/users/change-email" : "/users/change-phone";
       await api.patch(endpoint, {
-        [type]: newValue,
-        otp: otp.join(""), // Include OTP for verification
+        [type === "email" ? "email" : "phone"]: newValue,
+        // OTP is already verified in handleOTPVerification step, no need to send it again
       });
 
       toast.success(
