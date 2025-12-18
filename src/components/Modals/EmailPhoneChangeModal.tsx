@@ -1,6 +1,15 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Mail, Phone, Shield, Eye, EyeOff } from "lucide-react";
+import {
+  X,
+  Mail,
+  Phone,
+  Shield,
+  Eye,
+  EyeOff,
+  RefreshCw,
+  ShieldCheck,
+} from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import toast from "react-hot-toast";
 
@@ -45,9 +54,12 @@ export default function EmailPhoneChangeModal({
       await requestOTP();
       setStep("otp");
       setOtpSent(true);
+      setCountdown(60); // 60 second cooldown
       toast.success(
         `Verification code sent to your ${type === "email" ? "email" : "phone"}`
       );
+      // Focus first input after a brief delay
+      setTimeout(() => inputRefs.current[0]?.focus(), 100);
     } catch (err: any) {
       if (err.response?.status === 401) {
         logout();
@@ -72,9 +84,54 @@ export default function EmailPhoneChangeModal({
     }
   };
 
-  const handleOTPVerification = async () => {
-    if (!otp || otp.length !== 6) {
-      toast.error("Please enter the 6-digit verification code");
+  const handleOtpChange = (index: number, value: string) => {
+    // Only allow digits
+    if (value && !/^\d$/.test(value)) return;
+
+    const newOtp = [...otp];
+    newOtp[index] = value;
+    setOtp(newOtp);
+
+    // Auto-focus next input
+    if (value && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+
+    // Auto-submit when all 6 digits are entered
+    if (newOtp.every((digit) => digit !== "") && newOtp.join("").length === 6) {
+      handleOTPVerification(newOtp.join(""));
+    }
+  };
+
+  const handleKeyDown = (
+    index: number,
+    e: React.KeyboardEvent<HTMLInputElement>
+  ) => {
+    if (e.key === "Backspace" && !otp[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData("text").slice(0, 6);
+    if (/^\d{1,6}$/.test(pastedData)) {
+      const newOtp = [...otp];
+      for (let i = 0; i < 6; i++) {
+        newOtp[i] = pastedData[i] || "";
+      }
+      setOtp(newOtp);
+      // Focus the next empty input or the last one
+      const nextIndex = Math.min(pastedData.length, 5);
+      inputRefs.current[nextIndex]?.focus();
+    }
+  };
+
+  const handleOTPVerification = async (otpValue?: string) => {
+    const codeToVerify = otpValue || otp.join("");
+
+    if (!codeToVerify || codeToVerify.length !== 6) {
+      toast.error("Please enter the complete 6-digit verification code");
       return;
     }
 
@@ -82,7 +139,7 @@ export default function EmailPhoneChangeModal({
     try {
       // Verify OTP
       await api.post("/auth/verify-otp", {
-        otp,
+        otp: codeToVerify,
         type: type === "email" ? "email_change" : "phone_change",
       });
 
@@ -90,6 +147,9 @@ export default function EmailPhoneChangeModal({
       toast.success("Verification successful");
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Invalid verification code");
+      // Clear OTP on error
+      setOtp(["", "", "", "", "", ""]);
+      inputRefs.current[0]?.focus();
     } finally {
       setLoading(false);
     }
@@ -128,7 +188,7 @@ export default function EmailPhoneChangeModal({
         type === "email" ? "/users/change-email" : "/users/change-phone";
       await api.patch(endpoint, {
         [type]: newValue,
-        otp, // Include OTP for verification
+        otp: otp.join(""), // Include OTP for verification
       });
 
       toast.success(
@@ -154,11 +214,13 @@ export default function EmailPhoneChangeModal({
   const handleClose = () => {
     setStep("password");
     setPassword("");
-    setOtp("");
+    setOtp(["", "", "", "", "", ""]);
     setNewValue("");
     setShowPassword(false);
     setOtpSent(false);
     setLoading(false);
+    setResending(false);
+    setCountdown(0);
     onClose();
   };
 
@@ -295,47 +357,104 @@ export default function EmailPhoneChangeModal({
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Verification Code
-                      </label>
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                        Enter the 6-digit code sent to your{" "}
-                        {type === "email" ? "email" : "phone"}
+                    {/* Header */}
+                    <div className="text-center mb-4">
+                      <motion.div
+                        initial={{ scale: 0, rotate: -180 }}
+                        animate={{ scale: 1, rotate: 0 }}
+                        transition={{ type: "spring", duration: 0.6 }}
+                        className="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-green-500/30">
+                        {type === "email" ? (
+                          <Mail className="w-8 h-8 text-white" />
+                        ) : (
+                          <Phone className="w-8 h-8 text-white" />
+                        )}
+                      </motion.div>
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+                        Verify OTP
+                      </h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Enter the 6-digit code sent to{" "}
+                        {type === "email" ? (
+                          <span className="font-semibold text-blue-600 dark:text-blue-400">
+                            {currentValue}
+                          </span>
+                        ) : (
+                          <span className="font-semibold text-blue-600 dark:text-blue-400">
+                            {maskPhoneNumber(currentValue)}
+                          </span>
+                        )}
                       </p>
-                      <input
-                        type="text"
-                        value={otp}
-                        onChange={(e) => {
-                          const value = e.target.value
-                            .replace(/\D/g, "")
-                            .slice(0, 6);
-                          setOtp(value);
-                        }}
-                        placeholder="000000"
-                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-center text-2xl font-mono tracking-widest text-base"
-                        maxLength={6}
-                        autoFocus
-                      />
                     </div>
-                    {otpSent && (
+
+                    {/* OTP Input */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-4 text-center">
+                        Enter 6-digit verification code
+                      </label>
+                      <div className="flex gap-3 justify-center">
+                        {otp.map((digit, index) => (
+                          <motion.input
+                            key={index}
+                            ref={(el) => (inputRefs.current[index] = el)}
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={1}
+                            value={digit}
+                            onChange={(e) =>
+                              handleOtpChange(index, e.target.value)
+                            }
+                            onKeyDown={(e) => handleKeyDown(index, e)}
+                            onPaste={index === 0 ? handlePaste : undefined}
+                            initial={{ scale: 0.8, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            transition={{ delay: index * 0.05 }}
+                            className="w-14 h-16 text-center text-2xl font-bold border-2 border-gray-300 dark:border-gray-600 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-200 dark:focus:ring-blue-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-all shadow-sm hover:shadow-md"
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Verify Button */}
+                    <motion.button
+                      onClick={() => handleOTPVerification()}
+                      disabled={loading || otp.join("").length !== 6}
+                      whileHover={{
+                        scale: otp.join("").length === 6 ? 1.02 : 1,
+                      }}
+                      whileTap={{ scale: otp.join("").length === 6 ? 0.98 : 1 }}
+                      className="w-full py-3.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed mb-4 shadow-lg shadow-green-500/30 flex items-center justify-center gap-2">
+                      {loading ? (
+                        <>
+                          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          <span>Verifying...</span>
+                        </>
+                      ) : (
+                        <>
+                          <ShieldCheck className="w-5 h-5" />
+                          <span>Verify OTP</span>
+                        </>
+                      )}
+                    </motion.button>
+
+                    {/* Resend OTP */}
+                    <div className="text-center">
                       <button
                         onClick={resendOTP}
-                        disabled={loading}
-                        className="text-sm text-blue-600 dark:text-blue-400 hover:underline">
-                        Resend code
+                        disabled={resending || countdown > 0}
+                        className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors flex items-center gap-2 mx-auto font-medium">
+                        <RefreshCw
+                          className={`w-4 h-4 ${
+                            resending ? "animate-spin" : ""
+                          }`}
+                        />
+                        {countdown > 0
+                          ? `Resend code in ${countdown}s`
+                          : resending
+                          ? "Sending..."
+                          : "Didn't receive code? Resend"}
                       </button>
-                    )}
-                    <button
-                      onClick={handleOTPVerification}
-                      disabled={loading || otp.length !== 6}
-                      className={`w-full py-3 px-4 rounded-lg text-white font-medium transition-colors ${
-                        loading || otp.length !== 6
-                          ? "bg-gray-400 cursor-not-allowed"
-                          : "bg-blue-600 hover:bg-blue-700"
-                      }`}>
-                      {loading ? "Verifying..." : "Verify Code"}
-                    </button>
+                    </div>
                   </motion.div>
                 )}
 
@@ -363,7 +482,10 @@ export default function EmailPhoneChangeModal({
                         autoFocus
                       />
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                        Current {type}: {currentValue}
+                        Current {type}:{" "}
+                        {type === "phone"
+                          ? maskPhoneNumber(currentValue)
+                          : currentValue}
                       </p>
                     </div>
                     <button

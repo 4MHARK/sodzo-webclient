@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
-import { Menu, Bell, Search, User, Globe, LogOut } from "lucide-react";
-import { motion } from 'framer-motion';
+import { Menu, Bell, Search, User, Globe, LogOut, Lock } from "lucide-react";
+import { motion } from "framer-motion";
 import { useNavigate, Link } from "react-router-dom";
+import toast from "react-hot-toast";
 import ThemeToggle from '../UI/ThemeToggle';
 import { useUser } from '../../contexts/UserContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { getAvatarUrl } from "../../utils/env";
+import ChangePasswordModal from "../Modals/ChangePasswordModal";
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -17,17 +19,21 @@ export default function Header({ onMenuClick }: HeaderProps) {
   const { user: authUser, logout } = useAuth();
   const navigate = useNavigate();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+      if (
+        profileRef.current &&
+        !profileRef.current.contains(event.target as Node)
+      ) {
         setProfileOpen(false);
       }
     }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   return (
     <motion.header
@@ -172,6 +178,15 @@ export default function Header({ onMenuClick }: HeaderProps) {
                     <User className="w-4 h-4 mr-3" />
                     Profile Settings
                   </Link>
+                  <button
+                    onClick={() => {
+                      setProfileOpen(false);
+                      setChangePasswordOpen(true);
+                    }}
+                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                    <Lock className="w-4 h-4 mr-3" />
+                    Change Password
+                  </button>
                   <Link
                     to="/settings?tab=nodes"
                     className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -206,6 +221,15 @@ export default function Header({ onMenuClick }: HeaderProps) {
           </div>
         </div>
       </div>
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        isOpen={changePasswordOpen}
+        onClose={() => setChangePasswordOpen(false)}
+        onSuccess={() => {
+          toast.success("Password changed successfully!");
+        }}
+      />
     </motion.header>
   );
 }

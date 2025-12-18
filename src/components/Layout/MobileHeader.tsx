@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, User, Globe, LogOut, X, ChevronLeft } from "lucide-react";
+import { Menu, User, Globe, LogOut, X, ChevronLeft, Lock } from "lucide-react";
+import toast from "react-hot-toast";
 import { useUser } from "../../contexts/UserContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { getAvatarUrl } from "../../utils/env";
 import ThemeToggle from "../UI/ThemeToggle";
+import ChangePasswordModal from "../Modals/ChangePasswordModal";
 
 interface MobileHeaderProps {
   onMenuClick: () => void;
@@ -25,6 +27,7 @@ export default function MobileHeader({
   const { user, logout: userLogout } = useUser();
   const { user: authUser, logout } = useAuth();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
   // Get page title from location if not provided
@@ -173,6 +176,15 @@ export default function MobileHeader({
                         <User className="w-4 h-4 mr-3 text-gray-500 dark:text-gray-400" />
                         Profile Settings
                       </Link>
+                      <button
+                        onClick={() => {
+                          setProfileOpen(false);
+                          setChangePasswordOpen(true);
+                        }}
+                        className="flex items-center w-full px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors active:bg-gray-100 dark:active:bg-gray-600">
+                        <Lock className="w-4 h-4 mr-3 text-gray-500 dark:text-gray-400" />
+                        Change Password
+                      </button>
                       <Link
                         to="/settings?tab=nodes"
                         className="flex items-center px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors active:bg-gray-100 dark:active:bg-gray-600"
@@ -207,6 +219,15 @@ export default function MobileHeader({
           </div>
         </div>
       </div>
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        isOpen={changePasswordOpen}
+        onClose={() => setChangePasswordOpen(false)}
+        onSuccess={() => {
+          toast.success("Password changed successfully!");
+        }}
+      />
     </motion.header>
   );
 }
