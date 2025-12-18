@@ -35,6 +35,7 @@ interface AuthContextType {
   api: AxiosInstance;
   showVerificationModal: boolean;
   verificationEmail?: string;
+  verificationPhoneNumber?: string;
   setShowVerificationModal: (show: boolean) => void;
 }
 
@@ -45,6 +46,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [token, setTokenState] = useState<string | null>(null); // access token stays in memory only
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState<
+    string | undefined
+  >(undefined);
+  const [verificationPhoneNumber, setVerificationPhoneNumber] = useState<
     string | undefined
   >(undefined);
   // Keep a ref for the access token so createAPI's request interceptor can read a stable reference
@@ -391,6 +395,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (err && typeof err === "object" && "isVerificationNeeded" in err) {
           const verificationErr = err as any;
           setVerificationEmail(verificationErr.email || email);
+          setVerificationPhoneNumber(
+            verificationErr.phoneNumber || verificationErr.phone
+          );
           setShowVerificationModal(true);
           throw new Error("Account verification required");
         }
@@ -434,6 +441,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
           if (needsVerification) {
             setVerificationEmail(errorData?.email || email);
+            setVerificationPhoneNumber(
+              errorData?.phoneNumber || errorData?.phone
+            );
             setShowVerificationModal(true);
             throw new Error("Account verification required");
           }
@@ -564,6 +574,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         api: apiRef.current!,
         showVerificationModal,
         verificationEmail,
+        verificationPhoneNumber,
         setShowVerificationModal,
       }}>
       {children}
@@ -571,6 +582,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isOpen={showVerificationModal}
         onClose={() => setShowVerificationModal(false)}
         email={verificationEmail}
+        phoneNumber={verificationPhoneNumber}
         onVerified={handleVerificationComplete}
       />
     </AuthContext.Provider>
