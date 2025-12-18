@@ -300,22 +300,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           { withCredentials: true }
         );
 
-        // Check response for API key approval errors (shouldn't happen, but safety check)
-        const responseData = resp.data as any;
-        if (
-          responseData?.message &&
-          typeof responseData.message === "string" &&
-          responseData.message.toLowerCase().includes("pending approval")
-        ) {
-          const errorMessage =
-            responseData.message ||
-            "This production API key is pending approval. Please wait for SabyUser approval before using it.";
-          console.error(
-            "[AuthContext] ❌ API key approval required in response:",
-            errorMessage
-          );
-          throw new Error(errorMessage);
-        }
+        // Removed: API key approval error checking
+        // API keys are no longer part of authentication flow
 
         const data = resp.data as any;
         const userResp: User | undefined = data.user ?? data ?? null;

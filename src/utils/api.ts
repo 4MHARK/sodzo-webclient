@@ -5,7 +5,6 @@ import axios, {
 } from "axios";
 import { getApiKeySync } from "./apiKeyStorage";
 import { db } from "./dbService";
-import { getLoginModeSync, shouldAddApiKeyToLogin } from "./loginMode";
 import { ENV_CONFIG } from "./env";
 import { extractRateLimitInfo, getSecondsUntilReset } from "./rateLimit";
 
@@ -25,6 +24,7 @@ export const API_ENDPOINTS = {
   USER: import.meta.env.VITE_API_USER_ENDPOINT || "/user",
   NODE: import.meta.env.VITE_API_NODE_ENDPOINT || "/node",
   FORMS: import.meta.env.VITE_API_FORMS_ENDPOINT || "/project-forms",
+  CHECK_API_KEY_STATUS: "/auth/check-api-key-status",
 };
 
 const LOCAL_REFRESH_KEY =
@@ -55,95 +55,11 @@ export function createAPI(
         return config;
       }
 
-      // Check if this is a login request FIRST (before token check)
-      // Match various login endpoint formats (relative, absolute, with/without base)
-      const url = config.url || "";
-      const authEndpoint = API_ENDPOINTS.AUTH || "/auth/login";
-      const isLoginRequest =
-        url.includes("/auth/login") ||
-        url === authEndpoint ||
-        url.endsWith("/auth/login") ||
-        url.includes("auth/login") ||
-        (authEndpoint.startsWith("/") && url.endsWith(authEndpoint)) ||
-        (authEndpoint.startsWith("/") &&
-          url.includes(authEndpoint.replace("/", "")));
+      // Removed: API key attachment for login requests
+      // All registered users can login without API key requirement
+      // API keys are no longer part of authentication flow
 
-      // For ALL login requests, add API key if available (regardless of admin/user mode)
-      // User mode: Required for ordinary users to access web portal
-      // Admin mode: Optional (backend uses apiKeyAuth.optional() - harmless if present)
-      // We add it regardless of token presence - backend will use API key if present
-      if (isLoginRequest) {
-        // Try cache first (fast, synchronous)
-        let globalApiKey = getApiKeySync();
-
-        // Fallback: if cache is empty, fetch from IndexedDB asynchronously
-        if (!globalApiKey) {
-          console.warn(
-            "[API Interceptor] ⚠️ Cache empty, attempting async fetch from IndexedDB..."
-          );
-          try {
-            // Use dynamic import with Promise chain to avoid esbuild async/await issues
-            const apiKeyModule = await import("./apiKeyStorage");
-            const fetchedKey = await apiKeyModule.getApiKey();
-
-            if (fetchedKey) {
-              apiKeyModule.updateApiKeyCache(fetchedKey);
-              globalApiKey = fetchedKey;
-              console.log(
-                "[API Interceptor] ✅ Fetched and cached API key from IndexedDB"
-              );
-            }
-          } catch (error) {
-            console.error(
-              "[API Interceptor] ❌ Failed to fetch API key from IndexedDB:",
-              error
-            );
-          }
-        }
-
-        if (globalApiKey) {
-          // Add API key as a custom header (for all login requests)
-          (config.headers as Record<string, string>)["X-API-Key"] =
-            globalApiKey;
-
-          const loginMode = getLoginModeSync();
-          console.log(
-            `[API Interceptor] ✅ Added API key to login request (${loginMode} mode)`,
-            {
-              header: "X-API-Key",
-              keyPreview: `${globalApiKey.substring(0, 10)}...`,
-              source: getApiKeySync() === globalApiKey ? "cache" : "IndexedDB",
-              loginMode,
-            }
-          );
-        } else {
-          const loginMode = getLoginModeSync();
-          if (loginMode === "user") {
-            // Only warn for user mode (required)
-            console.error(
-              "[API Interceptor] ❌ No API key available for login! Check Admin Settings."
-            );
-          } else {
-            // Admin mode doesn't require it, just log
-            console.log(
-              "[API Interceptor] ℹ️ No API key available (Admin mode - not required)"
-            );
-          }
-        }
-
-        // Debug logging for login requests
-        const loginMode = getLoginModeSync();
-        console.log("[API Interceptor] Login Request Debug:", {
-          url: config.url,
-          loginMode,
-          hasApiKey: !!globalApiKey,
-          apiKeyPreview: globalApiKey
-            ? `${globalApiKey.substring(0, 10)}...`
-            : "none",
-        });
-      }
-
-      // Attach access token if available (for non-login requests or after API key is set)
+      // Attach access token if available
       const token = getAccessToken ? getAccessToken() : null;
       if (token) {
         (config.headers as Record<string, string>)[
@@ -151,8 +67,8 @@ export function createAPI(
         ] = `Bearer ${token}`;
       }
 
-      // For non-login requests without token, add API key if available
-      if (!isLoginRequest && !token) {
+      // For requests without token, add API key if available (for non-auth endpoints)
+      if (!token) {
         const globalApiKey = getApiKeySync();
         if (globalApiKey) {
           (config.headers as Record<string, string>)["X-API-Key"] =
@@ -294,66 +210,8 @@ export function createAPI(
     );
   };
 
-  // Helper function to check if error indicates API key approval needed
-  const isApiKeyApprovalNeeded = (error: AxiosError): boolean => {
-    const errorData = error.response?.data as any;
-
-    // Check response status - 403 often indicates API key issues
-    const isForbidden = error.response?.status === 403;
-
-    // Get error message from various possible locations
-    const errorMessage = (
-      errorData?.message ||
-      errorData?.error ||
-      errorData?.msg ||
-      error.message ||
-      ""
-    ).toLowerCase();
-
-    // Check for API key approval-related keywords (case-insensitive)
-    const approvalKeywords = [
-      "pending approval",
-      "api key.*pending",
-      "wait for.*approval",
-      "sabyuser approval",
-      "approval.*required",
-      "key.*pending",
-      "production api key is pending",
-      "please wait for.*approval",
-    ];
-
-    const hasApprovalKeyword = approvalKeywords.some((keyword) => {
-      const regex = new RegExp(keyword, "i");
-      return regex.test(errorMessage);
-    });
-
-    // Check for specific error codes
-    const approvalErrorCode =
-      errorData?.code === "API_KEY_PENDING_APPROVAL" ||
-      errorData?.errorCode === "API_KEY_PENDING_APPROVAL" ||
-      errorData?.code === "API_KEY_APPROVAL_REQUIRED";
-
-    // Also check if it's a 403 and message contains "api key"
-    const isApiKeyError =
-      isForbidden &&
-      (errorMessage.includes("api key") ||
-        errorMessage.includes("apikey") ||
-        errorMessage.includes("api-key"));
-
-    const result = hasApprovalKeyword || approvalErrorCode || isApiKeyError;
-
-    if (import.meta.env.DEV && result) {
-      console.debug("[isApiKeyApprovalNeeded] Detected approval error:", {
-        status: error.response?.status,
-        message: errorMessage,
-        hasKeyword: hasApprovalKeyword,
-        hasCode: approvalErrorCode,
-        isApiKeyError,
-      });
-    }
-
-    return result;
-  };
+  // Removed: isApiKeyApprovalNeeded helper function
+  // API keys are no longer part of authentication flow
 
   api.interceptors.response.use(
     async (res) => {
@@ -436,52 +294,8 @@ export function createAPI(
         return Promise.reject(rateLimitError);
       }
 
-      // Check if error indicates API key approval needed (FIRST - before any other checks)
-      // This MUST prevent authentication - check multiple ways to ensure detection
-      const errorData = err.response?.data as any;
-      const errorMessage = (
-        errorData?.message ||
-        errorData?.error ||
-        errorData?.msg ||
-        err.message ||
-        ""
-      ).toLowerCase();
-
-      const is403 = err.response?.status === 403;
-      const hasApprovalMessage =
-        errorMessage.includes("pending approval") ||
-        (errorMessage.includes("wait for") &&
-          errorMessage.includes("approval")) ||
-        errorMessage.includes("sabyuser approval");
-
-      // Check if this is an API key approval error
-      if (isApiKeyApprovalNeeded(err) || (is403 && hasApprovalMessage)) {
-        const finalErrorMessage =
-          errorData?.message ||
-          errorData?.error ||
-          errorData?.msg ||
-          "This production API key is pending approval. Please wait for SabyUser approval before using it.";
-
-        console.error(
-          "[API Interceptor] ❌ API KEY APPROVAL REQUIRED - BLOCKING AUTHENTICATION",
-          {
-            status: err.response?.status,
-            message: finalErrorMessage,
-            url: err.config?.url,
-            isLoginRequest: err.config?.url?.includes("/auth/login"),
-          }
-        );
-
-        // CRITICAL: Reject immediately - this prevents login from succeeding
-        const approvalError: any = new Error(finalErrorMessage);
-        approvalError.isApiKeyApprovalNeeded = true;
-        approvalError.status = err.response?.status || 403;
-        approvalError.response = err.response;
-        approvalError.config = err.config;
-
-        // Ensure this error is not caught by token refresh logic
-        return Promise.reject(approvalError);
-      }
+      // Removed: API key approval error checking
+      // API keys are no longer part of authentication flow
 
       // Check if 401 error indicates verification needed (before attempting refresh)
       if (err.response?.status === 401 && isVerificationNeeded(err)) {
