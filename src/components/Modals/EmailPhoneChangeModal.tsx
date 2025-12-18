@@ -11,6 +11,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
+import { useUser } from "../../contexts/UserContext";
 import toast from "react-hot-toast";
 
 interface EmailPhoneChangeModalProps {
@@ -28,7 +29,8 @@ export default function EmailPhoneChangeModal({
   currentValue,
   onSuccess,
 }: EmailPhoneChangeModalProps) {
-  const { api, logout } = useAuth();
+  const { api, logout, user: authUser } = useAuth();
+  const { user } = useUser();
   const [step, setStep] = useState<"password" | "otp" | "newValue">("password");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState<string[]>(["", "", "", "", "", ""]);
@@ -39,6 +41,9 @@ export default function EmailPhoneChangeModal({
   const [resending, setResending] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // Get user email from auth context or user context
+  const userEmail = authUser?.email || user?.email || "";
 
   // Helper function to mask phone number - show first 3 digits and last 2 digits
   const maskPhoneNumber = (phone?: string): string => {
@@ -173,12 +178,17 @@ export default function EmailPhoneChangeModal({
       return;
     }
 
+    if (!userEmail) {
+      toast.error("User email not found. Please try logging in again.");
+      return;
+    }
+
     setLoading(true);
     try {
-      // Verify OTP
+      // Verify OTP - backend requires email, not type
       await api.post("/auth/verify-otp", {
+        email: userEmail, // Backend requires email to look up user
         otp: codeToVerify,
-        type: type === "email" ? "email_change" : "phone_change",
       });
 
       setStep("newValue");
