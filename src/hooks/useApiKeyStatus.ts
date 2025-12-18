@@ -8,14 +8,14 @@ import { useAuth } from "../contexts/AuthContext";
 const POLL_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 export const useApiKeyStatus = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, api } = useAuth();
   const [status, setStatus] = useState<ApiKeyStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
 
   const fetchStatus = useCallback(async () => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !api) {
       setLoading(false);
       return;
     }
@@ -23,7 +23,7 @@ export const useApiKeyStatus = () => {
     try {
       setLoading(true);
       setError(null);
-      const result = await checkApiKeyStatus();
+      const result = await checkApiKeyStatus(api);
       setStatus(result);
       setLastChecked(new Date());
     } catch (err) {
@@ -36,7 +36,7 @@ export const useApiKeyStatus = () => {
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, api]);
 
   // Initial fetch
   useEffect(() => {

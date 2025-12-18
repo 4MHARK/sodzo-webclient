@@ -1,4 +1,4 @@
-import { api } from "../utils/api";
+import { AxiosInstance } from "axios";
 import { API_ENDPOINTS } from "../utils/api";
 
 export interface ApiKeyStatus {
@@ -17,11 +17,14 @@ export interface ApiKeyStatus {
 
 /**
  * Check API key status (expiration, approval, etc.)
+ * @param apiInstance - Axios instance with authentication configured
  * @returns Promise<ApiKeyStatus>
  */
-export const checkApiKeyStatus = async (): Promise<ApiKeyStatus> => {
+export const checkApiKeyStatus = async (
+  apiInstance: AxiosInstance
+): Promise<ApiKeyStatus> => {
   try {
-    const response = await api.get<ApiKeyStatus>(
+    const response = await apiInstance.get<ApiKeyStatus>(
       API_ENDPOINTS.CHECK_API_KEY_STATUS
     );
     return response.data;
