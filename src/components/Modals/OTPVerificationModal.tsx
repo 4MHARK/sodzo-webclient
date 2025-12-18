@@ -42,13 +42,18 @@ export default function OTPVerificationModal({
   const [countdown, setCountdown] = useState(0);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Helper function to mask phone number
+  // Helper function to mask phone number - show first 3 digits and last 2 digits
   const maskPhoneNumber = (phone?: string): string => {
-    if (!phone) return "09XXXXXX456";
-    if (phone.length <= 4) return phone;
-    const last4 = phone.slice(-4);
-    const prefix = phone.slice(0, 2);
-    return `${prefix}XXXXXX${last4}`;
+    if (!phone) return "XXXXXXXXXX";
+    if (phone.length <= 3) {
+      // If 3 digits or less, show all digits
+      return phone;
+    }
+    // Show first 3 digits, mask the middle, show last 2 digits
+    const first3 = phone.slice(0, 3);
+    const last2 = phone.slice(-2);
+    const maskedLength = Math.max(0, phone.length - 5); // Middle digits to mask
+    return first3 + "X".repeat(maskedLength) + last2;
   };
 
   useEffect(() => {
