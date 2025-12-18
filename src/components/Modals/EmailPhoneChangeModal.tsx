@@ -31,11 +31,41 @@ export default function EmailPhoneChangeModal({
   const { api, logout } = useAuth();
   const [step, setStep] = useState<"password" | "otp" | "newValue">("password");
   const [password, setPassword] = useState("");
-  const [otp, setOtp] = useState("");
+  const [otp, setOtp] = useState<string[]>(["", "", "", "", "", ""]);
   const [newValue, setNewValue] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // Helper function to mask phone number - show first 3 digits and last 2 digits
+  const maskPhoneNumber = (phone?: string): string => {
+    if (!phone) return "XXXXXXXXXX";
+
+    // Remove all non-digit characters for processing
+    const digitsOnly = phone.replace(/\D/g, "");
+
+    if (digitsOnly.length <= 3) {
+      // If 3 digits or less, show all digits
+      return digitsOnly;
+    }
+
+    if (digitsOnly.length <= 5) {
+      // If 5 digits or less, show first 3 and last 2 (may overlap)
+      const first3 = digitsOnly.slice(0, 3);
+      const last2 = digitsOnly.slice(-2);
+      return first3 + "X".repeat(Math.max(0, digitsOnly.length - 5)) + last2;
+    }
+
+    // Show first 3 digits, mask the middle, show last 2 digits
+    const first3 = digitsOnly.slice(0, 3);
+    const last2 = digitsOnly.slice(-2);
+    const maskedLength = Math.max(0, digitsOnly.length - 5); // Middle digits to mask
+
+    return first3 + "X".repeat(maskedLength) + last2;
+  };
 
   const handlePasswordVerification = async () => {
     if (!password) {
@@ -102,6 +132,14 @@ export default function EmailPhoneChangeModal({
       handleOTPVerification(newOtp.join(""));
     }
   };
+
+  // Countdown timer for resend
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [countdown]);
 
   const handleKeyDown = (
     index: number,
@@ -225,14 +263,17 @@ export default function EmailPhoneChangeModal({
   };
 
   const resendOTP = async () => {
-    setLoading(true);
+    if (countdown > 0) return;
+
+    setResending(true);
     try {
       await requestOTP();
+      setCountdown(60); // 60 second cooldown
       toast.success("Verification code resent!");
     } catch (err: any) {
       toast.error("Failed to resend code. Please try again.");
     } finally {
-      setLoading(false);
+      setResending(false);
     }
   };
 

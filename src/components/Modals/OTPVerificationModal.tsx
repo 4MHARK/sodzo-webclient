@@ -45,14 +45,27 @@ export default function OTPVerificationModal({
   // Helper function to mask phone number - show first 3 digits and last 2 digits
   const maskPhoneNumber = (phone?: string): string => {
     if (!phone) return "XXXXXXXXXX";
-    if (phone.length <= 3) {
+
+    // Remove all non-digit characters for processing
+    const digitsOnly = phone.replace(/\D/g, "");
+
+    if (digitsOnly.length <= 3) {
       // If 3 digits or less, show all digits
-      return phone;
+      return digitsOnly;
     }
+
+    if (digitsOnly.length <= 5) {
+      // If 5 digits or less, show first 3 and last 2 (may overlap)
+      const first3 = digitsOnly.slice(0, 3);
+      const last2 = digitsOnly.slice(-2);
+      return first3 + "X".repeat(Math.max(0, digitsOnly.length - 5)) + last2;
+    }
+
     // Show first 3 digits, mask the middle, show last 2 digits
-    const first3 = phone.slice(0, 3);
-    const last2 = phone.slice(-2);
-    const maskedLength = Math.max(0, phone.length - 5); // Middle digits to mask
+    const first3 = digitsOnly.slice(0, 3);
+    const last2 = digitsOnly.slice(-2);
+    const maskedLength = Math.max(0, digitsOnly.length - 5); // Middle digits to mask
+
     return first3 + "X".repeat(maskedLength) + last2;
   };
 

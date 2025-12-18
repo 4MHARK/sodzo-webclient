@@ -69,10 +69,10 @@ export function createAPI(
 
       // For requests without token, add API key if available (for non-auth endpoints)
       if (!token) {
-        const globalApiKey = getApiKeySync();
-        if (globalApiKey) {
-          (config.headers as Record<string, string>)["X-API-Key"] =
-            globalApiKey;
+          const globalApiKey = getApiKeySync();
+          if (globalApiKey) {
+            (config.headers as Record<string, string>)["X-API-Key"] =
+              globalApiKey;
         }
       }
 

@@ -12,7 +12,6 @@ import Settings from "./pages/Settings";
 import Emails from "./pages/Emails";
 import AdminSettings from "./pages/AdminSettings";
 import Landing from "./pages/Landing";
-import Auth from "./pages/Auth";
 import Network from "./pages/Network";
 import Calendar from "./pages/Calendar";
 import Reports from "./pages/Reports";
@@ -69,7 +68,6 @@ function App() {
               {/* Public routes */}
               <Route path="/" element={<Landing />} />
               <Route path="/landing" element={<Landing />} />
-              <Route path="/auth" element={<Auth />} />
               <Route
                 path="/about"
                 element={
