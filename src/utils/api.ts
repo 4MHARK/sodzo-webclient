@@ -6,6 +6,8 @@ import axios, {
 import { getApiKeySync } from "./apiKeyStorage";
 import { db } from "./dbService";
 import { getLoginModeSync, shouldAddApiKeyToLogin } from "./loginMode";
+import { ENV_CONFIG } from "./env";
+import { extractRateLimitInfo, getSecondsUntilReset } from "./rateLimit";
 
 // Vite env: use VITE_API_BASE for flexible dev/prod bases.
 // For local development we recommend setting VITE_API_BASE=/v1 and using the Vite proxy (see vite.config.ts).
@@ -179,7 +181,12 @@ export function createAPI(
   // Cooldown/backoff for 429 responses to avoid spamming the refresh endpoint
   let refreshCooldownUntil = 0; // timestamp ms until which we won't attempt refresh
   let refreshBackoffMs = 10000; // initial backoff 10s
-  const REFRESH_BACKOFF_MAX = 120000; // max 2 minutes
+  const REFRESH_BACKOFF_MAX = 2000000; // max 2000 seconds (~33 minutes)
+
+  // Rate limit configuration (requests per minute)
+  // Note: Actual rate limiting is enforced by the backend API server
+  // This value is for reference and can be used for client-side throttling if needed
+  const RATE_LIMIT_RPM = ENV_CONFIG.RATE_LIMIT_REQUESTS_PER_MINUTE; // Default: 2000 requests per minute
 
   const inCooldown = () => Date.now() < refreshCooldownUntil;
 
@@ -368,6 +375,14 @@ export function createAPI(
           console.warn("[API] Failed to log API call:", error);
         }
       }
+
+      // Extract and store rate limit info
+      const rateLimitInfo = extractRateLimitInfo(res);
+      if (rateLimitInfo) {
+        // Store in a way that components can access
+        (res as any).rateLimitInfo = rateLimitInfo;
+      }
+
       return res;
     },
     async (err: AxiosError & { config?: CustomRequestConfig }) => {
@@ -395,6 +410,27 @@ export function createAPI(
       }
       const originalConfig = err.config;
       if (!originalConfig) return Promise.reject(err);
+
+      // Handle 429 Rate Limit errors (before other error checks)
+      if (err.response?.status === 429) {
+        const rateLimitInfo = extractRateLimitInfo(err.response);
+        const errorData = err.response?.data as any;
+
+        // Create enhanced error with rate limit info
+        const rateLimitError: any = new Error(
+          errorData?.message ||
+            errorData?.error?.message ||
+            "Too many requests. Please try again later."
+        );
+        rateLimitError.status = 429;
+        rateLimitError.rateLimitInfo = rateLimitInfo;
+        rateLimitError.retryAfter = rateLimitInfo
+          ? getSecondsUntilReset(rateLimitInfo)
+          : undefined;
+        rateLimitError.isRateLimitError = true;
+
+        return Promise.reject(rateLimitError);
+      }
 
       // Check if error indicates API key approval needed (FIRST - before any other checks)
       // This MUST prevent authentication - check multiple ways to ensure detection
@@ -563,7 +599,7 @@ if (import.meta.env.DEV) {
       if (!resp.ok) {
         if (resp.status === 401) {
           console.warn(
-            "[debug] cookie-refresh failed: 401 Unauthorized — cookie missing or invalid",
+            "[debug] cookie-refresh failed: 401 Unauthorized — cookie missing or invalid"
           );
         } else if (resp.status === 404) {
           console.warn("[debug] cookie-refresh endpoint not found (404)");
@@ -571,7 +607,7 @@ if (import.meta.env.DEV) {
           console.warn(
             "[debug] cookie-refresh returned",
             resp.status,
-            await resp.text(),
+            await resp.text()
           );
         }
         return { ok: false, status: resp.status };
@@ -587,11 +623,11 @@ if (import.meta.env.DEV) {
       );
       if (hasAccess) {
         console.log(
-          "[debug] cookie-refresh succeeded — cookies are working and server returned new tokens",
+          "[debug] cookie-refresh succeeded — cookies are working and server returned new tokens"
         );
       } else {
         console.log(
-          "[debug] cookie-refresh succeeded (200) — server did not return token in body; server may be using cookies to rotate refresh token",
+          "[debug] cookie-refresh succeeded (200) — server did not return token in body; server may be using cookies to rotate refresh token"
         );
       }
       return { ok: true, status: resp.status, data };

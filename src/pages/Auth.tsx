@@ -2,9 +2,17 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ThemeToggle from "../components/UI/ThemeToggle";
 import { Link } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+import RateLimitError from "../components/UI/RateLimitError";
+import toast from "react-hot-toast";
 
 export default function Auth() {
   const [mode, setMode] = useState<"login" | "signup">("login");
+  const [rateLimitError, setRateLimitError] = useState<{
+    retryAfter?: number;
+    rateLimitInfo?: any;
+  } | null>(null);
+  const { login } = useAuth();
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-black relative overflow-hidden px-4 transition-colors">
@@ -132,13 +140,47 @@ export default function Auth() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -40 }}
               transition={{ duration: 0.4 }}
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setRateLimitError(null);
+
+                const formData = new FormData(e.currentTarget);
+                const email = formData.get("email") as string;
+                const password = formData.get("password") as string;
+
+                try {
+                  await login(email, password);
+                  toast.success("Login successful!");
+                  // Redirect logic can be added here
+                } catch (err: any) {
+                  if (err.isRateLimitError) {
+                    setRateLimitError({
+                      retryAfter: err.retryAfter,
+                      rateLimitInfo: err.rateLimitInfo,
+                    });
+                    toast.error(err.message);
+                  } else {
+                    toast.error(err.message || "Login failed");
+                  }
+                }
+              }}
               className="space-y-6">
+              {/* Rate Limit Error Display */}
+              {rateLimitError && (
+                <RateLimitError
+                  retryAfter={rateLimitError.retryAfter}
+                  rateLimitInfo={rateLimitError.rateLimitInfo}
+                  onDismiss={() => setRateLimitError(null)}
+                />
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-blue-100 mb-2">
                   Email
                 </label>
                 <input
                   type="email"
+                  name="email"
                   required
                   className="w-full px-4 py-3 border border-blue-900/30 rounded-lg bg-black/40 text-white focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder:text-blue-200/60"
                   placeholder="you@email.com"
@@ -150,6 +192,7 @@ export default function Auth() {
                 </label>
                 <input
                   type="password"
+                  name="password"
                   required
                   className="w-full px-4 py-3 border border-blue-900/30 rounded-lg bg-black/40 text-white focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder:text-blue-200/60"
                   placeholder="••••••••"

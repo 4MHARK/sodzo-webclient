@@ -1,11 +1,20 @@
-import { createContext, useContext, useState, ReactNode, useCallback, useRef, useEffect } from "react";
-import axios from 'axios';
+import {
+  createContext,
+  useContext,
+  useState,
+  ReactNode,
+  useCallback,
+  useRef,
+  useEffect,
+} from "react";
+import axios from "axios";
 import { createAPI, API_ENDPOINTS } from "../utils/api";
-import type { AxiosInstance } from 'axios';
+import type { AxiosInstance } from "axios";
 import { TokenManager } from "../utils/tokenManager";
 import { extractExpirationFromResponse } from "../utils/tokenUtils";
 import { SessionSync } from "../utils/sessionSync";
 import OTPVerificationModal from "../components/Modals/OTPVerificationModal";
+import { getSecondsUntilReset } from "../utils/rateLimit";
 
 // User model derived from /auth/login and GET /user/{id}
 interface User {
@@ -349,6 +358,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             errorMessage
           );
           throw new Error(errorMessage);
+        }
+
+        // Handle rate limit errors
+        if (axios.isAxiosError(err) && err.response?.status === 429) {
+          const rateLimitError = err as any;
+          const rateLimitInfo = rateLimitError.rateLimitInfo;
+          const retryAfter =
+            rateLimitError.retryAfter ||
+            (rateLimitInfo ? getSecondsUntilReset(rateLimitInfo) : 900);
+
+          let errorMessage = "Too many login attempts. ";
+          if (retryAfter > 0) {
+            const minutes = Math.ceil(retryAfter / 60);
+            errorMessage += `Please try again in ${minutes} minute${
+              minutes !== 1 ? "s" : ""
+            }.`;
+          } else {
+            errorMessage += "Please try again later.";
+          }
+
+          // Store rate limit info for UI display
+          const enhancedError: any = new Error(errorMessage);
+          enhancedError.isRateLimitError = true;
+          enhancedError.retryAfter = retryAfter;
+          enhancedError.rateLimitInfo = rateLimitInfo;
+
+          throw enhancedError;
         }
 
         // Check if error indicates verification needed
