@@ -51,108 +51,112 @@ export function createAPI(
   // Also attach global API key conditionally based on login mode (for login requests).
   api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
     try {
-      // First, attach access token if available (takes priority)
+      if (!config.headers) {
+        return config;
+      }
+
+      // Check if this is a login request FIRST (before token check)
+      // Match various login endpoint formats (relative, absolute, with/without base)
+      const url = config.url || "";
+      const authEndpoint = API_ENDPOINTS.AUTH || "/auth/login";
+      const isLoginRequest =
+        url.includes("/auth/login") ||
+        url === authEndpoint ||
+        url.endsWith("/auth/login") ||
+        url.includes("auth/login") ||
+        (authEndpoint.startsWith("/") && url.endsWith(authEndpoint)) ||
+        (authEndpoint.startsWith("/") &&
+          url.includes(authEndpoint.replace("/", "")));
+
+      // For ALL login requests, add API key if available (regardless of admin/user mode)
+      // User mode: Required for ordinary users to access web portal
+      // Admin mode: Optional (backend uses apiKeyAuth.optional() - harmless if present)
+      // We add it regardless of token presence - backend will use API key if present
+      if (isLoginRequest) {
+        // Try cache first (fast, synchronous)
+        let globalApiKey = getApiKeySync();
+
+        // Fallback: if cache is empty, fetch from IndexedDB asynchronously
+        if (!globalApiKey) {
+          console.warn(
+            "[API Interceptor] ⚠️ Cache empty, attempting async fetch from IndexedDB..."
+          );
+          try {
+            // Use dynamic import with Promise chain to avoid esbuild async/await issues
+            const apiKeyModule = await import("./apiKeyStorage");
+            const fetchedKey = await apiKeyModule.getApiKey();
+
+            if (fetchedKey) {
+              apiKeyModule.updateApiKeyCache(fetchedKey);
+              globalApiKey = fetchedKey;
+              console.log(
+                "[API Interceptor] ✅ Fetched and cached API key from IndexedDB"
+              );
+            }
+          } catch (error) {
+            console.error(
+              "[API Interceptor] ❌ Failed to fetch API key from IndexedDB:",
+              error
+            );
+          }
+        }
+
+        if (globalApiKey) {
+          // Add API key as a custom header (for all login requests)
+          (config.headers as Record<string, string>)["X-API-Key"] =
+            globalApiKey;
+
+          const loginMode = getLoginModeSync();
+          console.log(
+            `[API Interceptor] ✅ Added API key to login request (${loginMode} mode)`,
+            {
+              header: "X-API-Key",
+              keyPreview: `${globalApiKey.substring(0, 10)}...`,
+              source: getApiKeySync() === globalApiKey ? "cache" : "IndexedDB",
+              loginMode,
+            }
+          );
+        } else {
+          const loginMode = getLoginModeSync();
+          if (loginMode === "user") {
+            // Only warn for user mode (required)
+            console.error(
+              "[API Interceptor] ❌ No API key available for login! Check Admin Settings."
+            );
+          } else {
+            // Admin mode doesn't require it, just log
+            console.log(
+              "[API Interceptor] ℹ️ No API key available (Admin mode - not required)"
+            );
+          }
+        }
+
+        // Debug logging for login requests
+        const loginMode = getLoginModeSync();
+        console.log("[API Interceptor] Login Request Debug:", {
+          url: config.url,
+          loginMode,
+          hasApiKey: !!globalApiKey,
+          apiKeyPreview: globalApiKey
+            ? `${globalApiKey.substring(0, 10)}...`
+            : "none",
+        });
+      }
+
+      // Attach access token if available (for non-login requests or after API key is set)
       const token = getAccessToken ? getAccessToken() : null;
-      if (token && config.headers) {
+      if (token) {
         (config.headers as Record<string, string>)[
           "Authorization"
         ] = `Bearer ${token}`;
       }
 
-      // If no access token, conditionally attach global API key based on login mode
-      // API key is only added for "user" mode login requests, not for "admin" mode
-      if (!token && config.headers) {
-        // Check if this is a login request
-        // Match various login endpoint formats (relative, absolute, with/without base)
-        const url = config.url || "";
-        const authEndpoint = API_ENDPOINTS.AUTH || "/auth/login";
-        const isLoginRequest =
-          url.includes("/auth/login") ||
-          url === authEndpoint ||
-          url.endsWith("/auth/login") ||
-          url.includes("auth/login") ||
-          (authEndpoint.startsWith("/") && url.endsWith(authEndpoint)) ||
-          (authEndpoint.startsWith("/") &&
-            url.includes(authEndpoint.replace("/", "")));
-
-        // Debug logging for login requests
-        if (isLoginRequest) {
-          const loginMode = getLoginModeSync();
-          const shouldAdd = shouldAddApiKeyToLogin();
-          const apiKey = getApiKeySync();
-
-          console.log("[API Interceptor] Login Request Debug:", {
-            url: config.url,
-            loginMode,
-            shouldAddApiKey: shouldAdd,
-            hasApiKey: !!apiKey,
-            apiKeyPreview: apiKey ? `${apiKey.substring(0, 10)}...` : "none",
-          });
-        }
-
-        // Only add API key if:
-        // 1. It's a login request AND
-        // 2. Login mode is "user" (not "admin")
-        if (isLoginRequest && shouldAddApiKeyToLogin()) {
-          // Try cache first (fast, synchronous)
-          let globalApiKey = getApiKeySync();
-
-          // Fallback: if cache is empty, fetch from IndexedDB asynchronously
-          if (!globalApiKey) {
-            console.warn(
-              "[API Interceptor] ⚠️ Cache empty, attempting async fetch from IndexedDB..."
-            );
-            try {
-              // Use dynamic import with Promise chain to avoid esbuild async/await issues
-              const apiKeyModule = await import("./apiKeyStorage");
-              const fetchedKey = await apiKeyModule.getApiKey();
-
-              if (fetchedKey) {
-                apiKeyModule.updateApiKeyCache(fetchedKey);
-                globalApiKey = fetchedKey;
-                console.log(
-                  "[API Interceptor] ✅ Fetched and cached API key from IndexedDB"
-                );
-              }
-            } catch (error) {
-              console.error(
-                "[API Interceptor] ❌ Failed to fetch API key from IndexedDB:",
-                error
-              );
-            }
-          }
-
-          if (globalApiKey) {
-            // Add API key as a custom header
-            (config.headers as Record<string, string>)["X-API-Key"] =
-              globalApiKey;
-
-            console.log(
-              "[API Interceptor] ✅ Added API key to login request (User mode)",
-              {
-                header: "X-API-Key",
-                keyPreview: `${globalApiKey.substring(0, 10)}...`,
-                source:
-                  getApiKeySync() === globalApiKey ? "cache" : "IndexedDB",
-              }
-            );
-          } else {
-            console.error(
-              "[API Interceptor] ❌ No API key available for login! Check Admin Settings."
-            );
-          }
-        } else if (isLoginRequest && !shouldAddApiKeyToLogin()) {
-          // Admin mode - don't add API key
-          console.log(
-            "[API Interceptor] ⏭️ Skipping API key for login request (Admin mode)"
-          );
-        } else {
-          // Not a login request - add API key if available (for other unauthenticated calls)
-          const globalApiKey = getApiKeySync();
-          if (globalApiKey) {
-            (config.headers as Record<string, string>)["X-API-Key"] =
-              globalApiKey;
-          }
+      // For non-login requests without token, add API key if available
+      if (!isLoginRequest && !token) {
+        const globalApiKey = getApiKeySync();
+        if (globalApiKey) {
+          (config.headers as Record<string, string>)["X-API-Key"] =
+            globalApiKey;
         }
       }
 
