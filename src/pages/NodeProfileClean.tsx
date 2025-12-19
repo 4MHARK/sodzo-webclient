@@ -104,20 +104,53 @@ export default function NodeProfileClean() {
 
         setFormFields(fields);
 
-        // Initialize form values from node data
-        const initialValues: Record<string, any> = {};
-        fields.forEach((field) => {
-          // Get nested value from nodeData (e.g., "customFields.title" -> nodeData.customFields.title)
-          const value = getNestedValue(fullNodeData, field.name);
-          // Store as flat key for formValues (e.g., "customFields.title" as key)
-          initialValues[field.name] =
-            value !== undefined && value !== null
-              ? value
-              : field.value !== undefined && field.value !== null
-              ? field.value
-              : "";
+        setFormFields(fields);
+
+        // Initialize form values from node data, but restore from localStorage draft if available
+        const storageKey = `node_profile_draft_${selectedNode.id}`;
+        let savedDraft: Record<string, any> | null = null;
+        try {
+          const draftData = localStorage.getItem(storageKey);
+          if (draftData) {
+            savedDraft = JSON.parse(draftData);
+          }
+        } catch (e) {
+          // localStorage may be unavailable or corrupted, ignore
+          if (import.meta.env.DEV) {
+            console.warn(
+              "[NodeProfile] Failed to load draft from localStorage:",
+              e
+            );
+          }
+        }
+
+        // Initialize form values - merge existing values (if editing) with saved draft and new fields
+        setFormValues((prevValues) => {
+          // If we're editing, preserve existing values; otherwise start fresh
+          const baseValues = isEditing ? prevValues : {};
+          const initialValues: Record<string, any> = { ...baseValues };
+
+          fields.forEach((field) => {
+            // Only set value if it doesn't already exist (preserves user input when editing)
+            if (initialValues[field.name] === undefined) {
+              // First check if we have a saved draft value for this field
+              if (savedDraft && savedDraft[field.name] !== undefined) {
+                initialValues[field.name] = savedDraft[field.name];
+              } else {
+                // Otherwise, get nested value from nodeData
+                const value = getNestedValue(fullNodeData, field.name);
+                initialValues[field.name] =
+                  value !== undefined && value !== null
+                    ? value
+                    : field.value !== undefined && field.value !== null
+                    ? field.value
+                    : "";
+              }
+            }
+          });
+
+          return initialValues;
         });
-        setFormValues(initialValues);
       } catch (err: any) {
         if (err.response?.status === 401) {
           logout();
@@ -131,6 +164,8 @@ export default function NodeProfileClean() {
     };
 
     loadNodeDetails();
+    // Note: isEditing is intentionally NOT in dependencies to prevent resetting values during editing
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNode, api, logout]);
 
   const getNestedValue = (obj: any, path: string): any => {
@@ -140,13 +175,43 @@ export default function NodeProfileClean() {
   };
 
   const handleFieldChange = (fieldPath: string, value: any) => {
-    setFormValues((prev) => ({
-      ...prev,
-      [fieldPath]: value,
-    }));
+    setFormValues((prev) => {
+      const updated = {
+        ...prev,
+        [fieldPath]: value,
+      };
+
+      // Persist form values to localStorage as user types
+      if (selectedNode?.id) {
+        try {
+          const storageKey = `node_profile_draft_${selectedNode.id}`;
+          localStorage.setItem(storageKey, JSON.stringify(updated));
+        } catch (e) {
+          // localStorage may be unavailable, ignore
+          if (import.meta.env.DEV) {
+            console.warn(
+              "[NodeProfile] Failed to save draft to localStorage:",
+              e
+            );
+          }
+        }
+      }
+
+      return updated;
+    });
   };
 
   const handleSelect = (nodeId: string) => {
+    // Clear draft for previous node if switching
+    if (selectedNode?.id && selectedNode.id !== nodeId) {
+      try {
+        const storageKey = `node_profile_draft_${selectedNode.id}`;
+        localStorage.removeItem(storageKey);
+      } catch (e) {
+        // ignore
+      }
+    }
+
     const node = nodes.find((n) => n.id === nodeId);
     setSelectedNode(node);
     setIsEditing(false);
@@ -261,6 +326,16 @@ export default function NodeProfileClean() {
 
       toast.success("Node profile updated successfully!");
       setIsEditing(false);
+
+      // Clear the draft from localStorage after successful save
+      if (selectedNode?.id) {
+        try {
+          const storageKey = `node_profile_draft_${selectedNode.id}`;
+          localStorage.removeItem(storageKey);
+        } catch (e) {
+          // ignore
+        }
+      }
     } catch (err: any) {
       console.error("Error saving node:", err);
       console.error("[NodeProfile] Full error details:", {
@@ -298,6 +373,16 @@ export default function NodeProfileClean() {
         resetValues[field.name] = value ?? field.value ?? "";
       });
       setFormValues(resetValues);
+
+      // Clear the draft from localStorage when canceling
+      if (selectedNode?.id) {
+        try {
+          const storageKey = `node_profile_draft_${selectedNode.id}`;
+          localStorage.removeItem(storageKey);
+        } catch (e) {
+          // ignore
+        }
+      }
     }
     setIsEditing(false);
   };

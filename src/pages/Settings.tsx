@@ -131,20 +131,53 @@ export default function Settings() {
 
           setFormFields(fields);
 
-          // Initialize form values from user data
-          const initialValues: Record<string, any> = {};
-          fields.forEach((field) => {
-            // Get nested value from userData (e.g., "customFields.title" -> userData.customFields.title)
-            const value = getNestedValue(fullUserData, field.name);
-            // Store as flat key for formValues (e.g., "customFields.title" as key)
-            initialValues[field.name] =
-              value !== undefined && value !== null
-                ? value
-                : field.value !== undefined && field.value !== null
-                ? field.value
-                : "";
+          // Initialize form values from user data, but restore from localStorage draft if available
+          let savedDraft: Record<string, any> | null = null;
+          if (user?.id) {
+            try {
+              const storageKey = `user_profile_draft_${user.id}`;
+              const draftData = localStorage.getItem(storageKey);
+              if (draftData) {
+                savedDraft = JSON.parse(draftData);
+              }
+            } catch (e) {
+              // localStorage may be unavailable or corrupted, ignore
+              if (import.meta.env.DEV) {
+                console.warn(
+                  "[Settings] Failed to load draft from localStorage:",
+                  e
+                );
+              }
+            }
+          }
+
+          // Initialize form values - merge existing values (if editing) with saved draft and new fields
+          setFormValues((prevValues) => {
+            // If we're editing, preserve existing values; otherwise start fresh
+            const baseValues = isEditing ? prevValues : {};
+            const initialValues: Record<string, any> = { ...baseValues };
+
+            fields.forEach((field) => {
+              // Only set value if it doesn't already exist (preserves user input when editing)
+              if (initialValues[field.name] === undefined) {
+                // First check if we have a saved draft value for this field
+                if (savedDraft && savedDraft[field.name] !== undefined) {
+                  initialValues[field.name] = savedDraft[field.name];
+                } else {
+                  // Otherwise, get nested value from userData
+                  const value = getNestedValue(fullUserData, field.name);
+                  initialValues[field.name] =
+                    value !== undefined && value !== null
+                      ? value
+                      : field.value !== undefined && field.value !== null
+                      ? field.value
+                      : "";
+                }
+              }
+            });
+
+            return initialValues;
           });
-          setFormValues(initialValues);
         } catch (err: any) {
           if (err.response?.status === 401) {
             logout();
@@ -158,6 +191,8 @@ export default function Settings() {
       };
 
       fetchUserProfile();
+      // Note: isEditing is intentionally NOT in dependencies to prevent resetting values during editing
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user?.id, api, logout]);
 
     const getNestedValue = (obj: any, path: string): any => {
@@ -169,10 +204,30 @@ export default function Settings() {
     };
 
     const handleFieldChange = (fieldPath: string, value: any) => {
-      setFormValues((prev) => ({
-        ...prev,
-        [fieldPath]: value,
-      }));
+      setFormValues((prev) => {
+        const updated = {
+          ...prev,
+          [fieldPath]: value,
+        };
+
+        // Persist form values to localStorage as user types
+        if (user?.id) {
+          try {
+            const storageKey = `user_profile_draft_${user.id}`;
+            localStorage.setItem(storageKey, JSON.stringify(updated));
+          } catch (e) {
+            // localStorage may be unavailable, ignore
+            if (import.meta.env.DEV) {
+              console.warn(
+                "[Settings] Failed to save draft to localStorage:",
+                e
+              );
+            }
+          }
+        }
+
+        return updated;
+      });
     };
 
     const handleSave = async () => {
@@ -240,6 +295,16 @@ export default function Settings() {
 
         toast.success("Profile updated successfully!");
         setIsEditing(false);
+
+        // Clear the draft from localStorage after successful save
+        if (user?.id) {
+          try {
+            const storageKey = `user_profile_draft_${user.id}`;
+            localStorage.removeItem(storageKey);
+          } catch (e) {
+            // ignore
+          }
+        }
       } catch (err: unknown) {
         console.error("[Settings] Save error:", err);
         let msg = "Update failed";
@@ -331,7 +396,30 @@ export default function Settings() {
 
             {/* Right: Edit Button */}
             <button
-              onClick={() => setIsEditing(!isEditing)}
+              onClick={() => {
+                if (isEditing) {
+                  // Reset form values to original user data when canceling
+                  if (userData) {
+                    const resetValues: Record<string, any> = {};
+                    formFields.forEach((field) => {
+                      const value = getNestedValue(userData, field.name);
+                      resetValues[field.name] = value ?? field.value ?? "";
+                    });
+                    setFormValues(resetValues);
+
+                    // Clear the draft from localStorage when canceling
+                    if (user?.id) {
+                      try {
+                        const storageKey = `user_profile_draft_${user.id}`;
+                        localStorage.removeItem(storageKey);
+                      } catch (e) {
+                        // ignore
+                      }
+                    }
+                  }
+                }
+                setIsEditing(!isEditing);
+              }}
               className="flex items-center px-4 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors whitespace-nowrap">
               <Edit3 className="w-4 h-4 mr-2" />
               {isEditing ? "Cancel" : "Edit Profile"}

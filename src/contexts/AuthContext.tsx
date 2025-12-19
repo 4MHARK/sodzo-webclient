@@ -15,6 +15,7 @@ import { extractExpirationFromResponse } from "../utils/tokenUtils";
 import { SessionSync } from "../utils/sessionSync";
 import OTPVerificationModal from "../components/Modals/OTPVerificationModal";
 import { getSecondsUntilReset } from "../utils/rateLimit";
+import { detectMobileLoginIssues } from "../utils/mobileUtils";
 
 // User model derived from /auth/login and GET /user/{id}
 interface User {
@@ -217,10 +218,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         // Check if we have a refreshToken before attempting refresh
         const refreshToken = refreshTokenRef.current;
-        const legacy =
-          typeof localStorage !== "undefined"
-            ? localStorage.getItem("saby:refresh_token")
-            : null;
+        let legacy: string | null = null;
+        try {
+          if (typeof localStorage !== "undefined") {
+            legacy = localStorage.getItem("saby:refresh_token");
+          }
+        } catch (e) {
+          // localStorage may be unavailable on some mobile browsers
+          if (import.meta.env.DEV) {
+            console.debug(
+              "[AuthContext] localStorage unavailable for refresh token"
+            );
+          }
+        }
 
         // Don't attempt refresh if no refreshToken is available - backend requires it
         if (!refreshToken && !legacy) {
@@ -293,6 +303,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = useCallback(
     async (email: string, password: string) => {
       try {
+        // Check for mobile-specific issues before attempting login
+        const mobileIssues = detectMobileLoginIssues();
+        if (mobileIssues.isMobile) {
+          if (import.meta.env.DEV) {
+            console.debug("[AuthContext] Mobile login attempt:", {
+              userAgent: navigator.userAgent,
+              cookieEnabled: mobileIssues.cookiesEnabled,
+              localStorageAvailable: mobileIssues.localStorageAvailable,
+              issues: mobileIssues.issues,
+            });
+          }
+
+          // Warn user if there are known issues
+          if (mobileIssues.issues.length > 0 && import.meta.env.DEV) {
+            console.warn(
+              "[AuthContext] Potential mobile login issues detected:",
+              mobileIssues.issues
+            );
+          }
+        }
+
         // In cookie-only mode the backend should set HttpOnly cookies on successful login.
         const resp = await apiRef.current!.post(
           API_ENDPOINTS.AUTH,
@@ -316,13 +347,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         return userResp ?? ({} as User);
       } catch (err: unknown) {
-        // Log error for debugging
-        console.error("[AuthContext] Login error caught:", {
+        // Enhanced error logging for mobile debugging
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        const errorDetails: any = {
           error: err,
           isAxiosError: axios.isAxiosError(err),
           status: axios.isAxiosError(err) ? err.response?.status : undefined,
           message: err instanceof Error ? err.message : String(err),
-        });
+          isMobile,
+          userAgent: navigator.userAgent,
+          cookieEnabled: navigator.cookieEnabled,
+        };
+
+        if (axios.isAxiosError(err)) {
+          errorDetails.responseData = err.response?.data;
+          errorDetails.responseHeaders = err.response?.headers;
+          // Check for CORS errors which are common on mobile
+          if (!err.response && err.request) {
+            errorDetails.networkError = true;
+            errorDetails.corsIssue = "Possible CORS or network issue";
+          }
+        }
+
+        console.error("[AuthContext] Login error caught:", errorDetails);
         // Check if error indicates API key approval needed
         if (
           err &&

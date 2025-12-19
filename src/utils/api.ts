@@ -122,10 +122,19 @@ export function createAPI(
       const refreshToken = getRefreshToken ? getRefreshToken() : null;
       // Temporary fallback: if we don't have an in-memory refresh token but a legacy localStorage key exists,
       // include it in the body. This helps during migration; we avoid writing to localStorage in new code paths.
-      const legacy =
-        typeof localStorage !== "undefined"
-          ? localStorage.getItem(LOCAL_REFRESH_KEY)
-          : null;
+      let legacy: string | null = null;
+      try {
+        if (typeof localStorage !== "undefined") {
+          legacy = localStorage.getItem(LOCAL_REFRESH_KEY);
+        }
+      } catch (e) {
+        // localStorage may be unavailable on some mobile browsers (private mode, etc.)
+        if (import.meta.env.DEV) {
+          console.debug(
+            "[api] localStorage unavailable for refresh token fallback"
+          );
+        }
+      }
 
       // If no refreshToken is available, don't attempt refresh - backend requires it
       if (!refreshToken && !legacy) {

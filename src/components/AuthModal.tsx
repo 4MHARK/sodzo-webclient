@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import ForgotPasswordModal from "./Modals/ForgotPasswordModal";
 import { Mail, Lock, LogIn } from "lucide-react";
+import { detectMobileLoginIssues } from "../utils/mobileUtils";
 
 interface AuthModalProps {
   open: boolean;
@@ -25,24 +26,100 @@ const AuthModal: React.FC<AuthModalProps> = ({ open, onClose }) => {
       setEmail("");
       setPassword("");
       setError("");
+
+      // Check for mobile-specific issues when modal opens
+      const mobileIssues = detectMobileLoginIssues();
+      if (mobileIssues.isMobile && mobileIssues.issues.length > 0) {
+        // Don't show error immediately, but log it for debugging
+        if (import.meta.env.DEV) {
+          console.warn(
+            "[AuthModal] Mobile login issues detected:",
+            mobileIssues.issues
+          );
+        }
+      }
     }
   }, [open]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation(); // Prevent event bubbling on mobile
+
+    // Trim inputs to avoid whitespace issues
+    const trimmedEmail = email.trim();
+    const trimmedPassword = password.trim();
+
+    if (!trimmedEmail || !trimmedPassword) {
+      setError("Please enter both email and password");
+      return;
+    }
+
     setError("");
     setLoading(true);
+
     try {
-      await login(email, password);
+      await login(trimmedEmail, trimmedPassword);
       setLoading(false);
       toast.success("Login successful!");
       onClose();
       navigate("/dashboard");
     } catch (err) {
       setLoading(false);
-      const message = err instanceof Error ? err.message : "Login failed";
-      setError(message);
-      toast.error(message);
+      let message = "Login failed";
+
+      if (err instanceof Error) {
+        message = err.message;
+      } else if (typeof err === "object" && err !== null) {
+        // Handle axios errors
+        const axiosError = err as any;
+        if (axiosError.response?.data?.message) {
+          message = axiosError.response.data.message;
+        } else if (axiosError.message) {
+          message = axiosError.message;
+        }
+      }
+
+      // Enhanced error logging for mobile debugging
+      const mobileIssues = detectMobileLoginIssues();
+      if (import.meta.env.DEV || mobileIssues.isMobile) {
+        console.error("[AuthModal] Login error:", {
+          error: err,
+          userAgent: navigator.userAgent,
+          isMobile: mobileIssues.isMobile,
+          cookieEnabled: mobileIssues.cookiesEnabled,
+          localStorageAvailable: mobileIssues.localStorageAvailable,
+          issues: mobileIssues.issues,
+        });
+      }
+
+      // Provide more helpful error messages for mobile users
+      let displayMessage = message;
+      if (mobileIssues.isMobile) {
+        // Check for common mobile-specific errors
+        const lowerMessage = message.toLowerCase();
+        if (
+          lowerMessage.includes("network") ||
+          lowerMessage.includes("cors") ||
+          lowerMessage.includes("failed to fetch")
+        ) {
+          displayMessage =
+            "Network error. Please check your internet connection and try again. If the problem persists, ensure cookies are enabled in your browser settings.";
+        } else if (
+          lowerMessage.includes("unauthorized") ||
+          lowerMessage.includes("401")
+        ) {
+          displayMessage =
+            "Login failed. Please check your email and password. If you continue to have issues, try clearing your browser cache and cookies.";
+        }
+
+        // Add mobile-specific issue warnings
+        if (mobileIssues.issues.length > 0) {
+          displayMessage += ` ${mobileIssues.issues.join(" ")}`;
+        }
+      }
+
+      setError(displayMessage);
+      toast.error(displayMessage);
     }
   };
 
@@ -117,6 +194,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ open, onClose }) => {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="email"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    inputMode="email"
                     className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-sm"
                     placeholder="you@example.com"
                   />
@@ -148,6 +229,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ open, onClose }) => {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                    autoCapitalize="none"
+                    autoCorrect="off"
                     className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-sm"
                     placeholder="Enter your password"
                   />
@@ -169,12 +253,19 @@ const AuthModal: React.FC<AuthModalProps> = ({ open, onClose }) => {
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={loading || !email || !password}
-                className={`w-full py-3 px-4 rounded-lg font-semibold text-white transition-all duration-200 ${
-                  loading || !email || !password
+                disabled={loading || !email.trim() || !password.trim()}
+                className={`w-full py-3 px-4 rounded-lg font-semibold text-white transition-all duration-200 touch-target ${
+                  loading || !email.trim() || !password.trim()
                     ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-                }`}>
+                    : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:scale-95"
+                }`}
+                onTouchStart={(e) => {
+                  // Ensure touch events work properly on mobile
+                  e.currentTarget.classList.add("active");
+                }}
+                onTouchEnd={(e) => {
+                  e.currentTarget.classList.remove("active");
+                }}>
                 {loading ? (
                   <span className="flex items-center justify-center gap-2">
                     <svg
