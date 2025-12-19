@@ -211,7 +211,42 @@ jobs:
             set -e
             cd /opt/saby
             
+            echo "💾 Checking disk space..."
+            df -h /
+            
+            echo "🧹 Cleaning up Docker resources to free space..."
+            # Remove unused containers
+            docker container prune -f || true
+            
+            # Remove unused images (keep last 2 versions)
+            docker image prune -a -f --filter "until=24h" || true
+            
+            # Remove unused volumes
+            docker volume prune -f || true
+            
+            # Remove build cache
+            docker builder prune -af || true
+            
+            # Clean up old Docker logs
+            sudo journalctl --vacuum-time=7d || true
+            
+            echo "💾 Disk space after cleanup:"
+            df -h /
+            
+            # Check if we have enough space (at least 1GB free)
+            AVAILABLE_SPACE=$(df / | tail -1 | awk '{print $4}')
+            if [ "$AVAILABLE_SPACE" -lt 1048576 ]; then
+              echo "⚠️ WARNING: Low disk space detected. Available: ${AVAILABLE_SPACE}KB"
+              echo "💡 Consider manual cleanup on the server if deployment fails"
+            else
+              echo "✅ Sufficient disk space available: ${AVAILABLE_SPACE}KB"
+            fi
+            
             echo "🔐 Logging in to GHCR..."
+            # Use a temporary location for Docker config if home directory is full
+            export DOCKER_CONFIG=/tmp/.docker
+            mkdir -p $DOCKER_CONFIG
+            
             if [ -n "${{ secrets.GHCR_PAT }}" ]; then
               echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u fadebowaley --password-stdin
             else
