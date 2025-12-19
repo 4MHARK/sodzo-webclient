@@ -80,11 +80,25 @@ const AuthModal: React.FC<AuthModalProps> = ({ open, onClose }) => {
       }
 
       // Enhanced error logging for mobile debugging
-      const mobileIssues = detectMobileLoginIssues();
+      let mobileIssues;
+      try {
+        mobileIssues = detectMobileLoginIssues();
+      } catch (mobileError) {
+        // If mobile detection fails, create a safe fallback
+        mobileIssues = {
+          isMobile: false,
+          cookiesEnabled:
+            typeof navigator !== "undefined" ? navigator.cookieEnabled : true,
+          localStorageAvailable: true,
+          issues: [],
+        };
+      }
+      
       if (import.meta.env.DEV || mobileIssues.isMobile) {
         console.error("[AuthModal] Login error:", {
           error: err,
-          userAgent: navigator.userAgent,
+          userAgent:
+            typeof navigator !== "undefined" ? navigator.userAgent : "unknown",
           isMobile: mobileIssues.isMobile,
           cookieEnabled: mobileIssues.cookiesEnabled,
           localStorageAvailable: mobileIssues.localStorageAvailable,

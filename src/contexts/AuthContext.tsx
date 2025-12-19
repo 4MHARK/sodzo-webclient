@@ -303,28 +303,52 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = useCallback(
     async (email: string, password: string) => {
       try {
-        // Check for mobile-specific issues before attempting login
-        const mobileIssues = detectMobileLoginIssues();
-        if (mobileIssues.isMobile) {
-          if (import.meta.env.DEV) {
-            console.debug("[AuthContext] Mobile login attempt:", {
-              userAgent: navigator.userAgent,
-              cookieEnabled: mobileIssues.cookiesEnabled,
-              localStorageAvailable: mobileIssues.localStorageAvailable,
-              issues: mobileIssues.issues,
-            });
-          }
+        // Check for mobile-specific issues before attempting login (safely)
+        try {
+          const mobileIssues = detectMobileLoginIssues();
+          if (mobileIssues.isMobile) {
+            if (import.meta.env.DEV) {
+              console.debug("[AuthContext] Mobile login attempt:", {
+                userAgent:
+                  typeof navigator !== "undefined"
+                    ? navigator.userAgent
+                    : "unknown",
+                cookieEnabled: mobileIssues.cookiesEnabled,
+                localStorageAvailable: mobileIssues.localStorageAvailable,
+                issues: mobileIssues.issues,
+              });
+            }
 
-          // Warn user if there are known issues
-          if (mobileIssues.issues.length > 0 && import.meta.env.DEV) {
+            // Warn user if there are known issues
+            if (mobileIssues.issues.length > 0 && import.meta.env.DEV) {
+              console.warn(
+                "[AuthContext] Potential mobile login issues detected:",
+                mobileIssues.issues
+              );
+            }
+          }
+        } catch (mobileCheckError) {
+          // If mobile detection fails, continue with login anyway
+          if (import.meta.env.DEV) {
             console.warn(
-              "[AuthContext] Potential mobile login issues detected:",
-              mobileIssues.issues
+              "[AuthContext] Mobile detection failed, continuing with login:",
+              mobileCheckError
             );
           }
         }
 
         // In cookie-only mode the backend should set HttpOnly cookies on successful login.
+        if (import.meta.env.DEV) {
+          console.debug("[AuthContext] Attempting login:", {
+            endpoint: API_ENDPOINTS.AUTH,
+            baseURL: apiRef.current?.defaults?.baseURL,
+            fullURL: `${apiRef.current?.defaults?.baseURL || ""}${
+              API_ENDPOINTS.AUTH
+            }`,
+            email: email.substring(0, 3) + "***", // Partial email for logging
+          });
+        }
+
         const resp = await apiRef.current!.post(
           API_ENDPOINTS.AUTH,
           { email, password },
@@ -348,15 +372,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return userResp ?? ({} as User);
       } catch (err: unknown) {
         // Enhanced error logging for mobile debugging
-        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        const userAgent =
+          typeof navigator !== "undefined" ? navigator.userAgent : "unknown";
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(userAgent);
         const errorDetails: any = {
           error: err,
           isAxiosError: axios.isAxiosError(err),
           status: axios.isAxiosError(err) ? err.response?.status : undefined,
           message: err instanceof Error ? err.message : String(err),
           isMobile,
-          userAgent: navigator.userAgent,
-          cookieEnabled: navigator.cookieEnabled,
+          userAgent: userAgent,
+          cookieEnabled:
+            typeof navigator !== "undefined" ? navigator.cookieEnabled : false,
         };
 
         if (axios.isAxiosError(err)) {
