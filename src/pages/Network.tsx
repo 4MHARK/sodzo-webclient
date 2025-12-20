@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
-import { useUser } from "../contexts/UserContext";
-import type { User as UserModel } from "../contexts/UserContext";
+import type { User } from "../contexts/AuthContext";
 import {
   ChevronRight,
   ChevronDown,
@@ -35,17 +35,62 @@ interface Node {
 }
 
 export default function Network() {
-  const { api, logout, user: authUser } = useAuth();
-  const { user: userContextUser } = useUser();
+  const { api, logout, user } = useAuth();
   const { isMobile } = useDeviceDetection();
-  const [nodes, setNodes] = useState<Node[]>([]);
-  const [loading, setLoading] = useState(true);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
 
-  // Get user ID from both contexts
-  const user: Partial<UserModel> | null =
-    (authUser as unknown as Partial<UserModel>) ?? userContextUser ?? null;
+  // Get user ID from AuthContext (now supports full user model)
   const userId = user?.id;
+
+  // Fetch nodes using React Query - data persists in cache
+  const {
+    data: nodes = [],
+    isLoading: loading,
+    error,
+  } = useQuery({
+    queryKey: ["nodes", userId],
+    queryFn: async () => {
+      if (!userId) return [];
+
+      // Fetch user's nodes
+      const res = await api.get(`/users/${userId}/nodes`);
+      const userNodes = res.data?.results || res.data || [];
+
+      // Fetch full details for each node to get hierarchy info
+      const nodesWithDetails = await Promise.all(
+        userNodes.map(async (node: any) => {
+          try {
+            const nodeRes = await api.get(`/node/${node.id}`);
+            return nodeRes.data;
+          } catch (err) {
+            // If individual node fetch fails, use the node from list
+            return node;
+          }
+        })
+      );
+
+      return nodesWithDetails;
+    },
+    enabled: !!userId, // Only run query if userId exists
+    retry: (failureCount, error: any) => {
+      // Don't retry on 401 errors
+      if (error?.response?.status === 401) {
+        logout();
+        toast.error("Session expired — please sign in again");
+        return false;
+      }
+      return failureCount < 2; // Retry up to 2 times
+    },
+  });
+
+  // Handle errors
+  if (error) {
+    const axiosError = error as any;
+    if (axiosError.response?.status !== 401) {
+      toast.error("Failed to load network");
+      console.error("Network fetch error:", error);
+    }
+  }
 
   // Toggle node expansion
   const toggleNode = (nodeId: string) => {
@@ -90,50 +135,6 @@ export default function Network() {
 
     return rootNodes;
   };
-
-  // Fetch all nodes
-  useEffect(() => {
-    const fetchNodes = async () => {
-      if (!userId) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        // Fetch user's nodes
-        const res = await api.get(`/users/${userId}/nodes`);
-        const userNodes = res.data?.results || res.data || [];
-
-        // Fetch full details for each node to get hierarchy info
-        const nodesWithDetails = await Promise.all(
-          userNodes.map(async (node: any) => {
-            try {
-              const nodeRes = await api.get(`/node/${node.id}`);
-              return nodeRes.data;
-            } catch (err) {
-              // If individual node fetch fails, use the node from list
-              return node;
-            }
-          })
-        );
-
-        setNodes(nodesWithDetails);
-      } catch (err: any) {
-        if (err.response?.status === 401) {
-          logout();
-          toast.error("Session expired — please sign in again");
-        } else {
-          toast.error("Failed to load network");
-          console.error("Network fetch error:", err);
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchNodes();
-  }, [userId, api, logout]);
 
   // Render node tree recursively
   const renderNodeTree = (

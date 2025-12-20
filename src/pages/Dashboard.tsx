@@ -5,14 +5,14 @@ import ProjectCard from '../components/UI/ProjectCard';
 import ApiKeyStatusBanner from "../components/UI/ApiKeyStatusBanner";
 import { mockUser,mockDashboardMetrics, mockProjects, chartData } from '../data/mockData';
 import { Calendar, Clock, CheckCircle, AlertCircle } from 'lucide-react';
-import { useUser } from '../contexts/UserContext';
+import { useAuth } from "../contexts/AuthContext";
 import { useDeviceDetection } from "../hooks/useDeviceDetection";
 import { useApiKeyStatus } from "../hooks/useApiKeyStatus";
 
 export default function Dashboard() {
   const activeProjects = mockProjects.filter((p) => p.status === "active");
   const recentProjects = mockProjects.slice(0, 3);
-  const { user } = useUser();
+  const { user } = useAuth();
   const { isMobile } = useDeviceDetection();
   const { status, loading, shouldShowBanner, refetch } = useApiKeyStatus();
 

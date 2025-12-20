@@ -10,7 +10,6 @@ import {
   Calendar,
   BarChart3,
 } from "lucide-react";
-import { useUser } from "../../contexts/UserContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { mockUser } from "../../data/mockData";
 import { getAvatarUrl } from "../../utils/env";
@@ -40,13 +39,12 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
-  const { user } = useUser();
-  const { user: authUser, logout } = useAuth();
+  const { user, logout } = useAuth();
 
   // Check if user has admin privileges (isSaby, isOwner, or isSuper)
   // Only users with these privileges should see Admin link
   // Note: isAdmin alone is NOT sufficient - regular admins cannot see Admin section
-  const currentUser = user || (authUser as any);
+  const currentUser = user;
   const hasAdminAccess =
     currentUser?.isSaby === true ||
     currentUser?.isOwner === true ||
@@ -212,13 +210,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
               <img
                 src={getAvatarUrl(
                   user?.avatar,
-                  authUser?.avatarUrl || mockUser[0]?.avatar
+                  user?.avatarUrl || user?.avatar || mockUser[0]?.avatar
                 )}
                 alt={`${
                   user
                     ? `${user.firstname} ${user.lastname}`
-                    : authUser
-                    ? authUser.name ?? "User"
+                    : user
+                    ? user.name ?? user.firstname ?? "User"
                     : `${mockUser[0]?.firstname} ${mockUser[0]?.lastname}`
                 }`}
                 className="w-10 h-10 rounded-full"
@@ -227,14 +225,16 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                 <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                   {user
                     ? `${user.firstname} ${user.lastname}`
-                    : authUser
-                    ? authUser.name ?? "User"
+                    : user
+                    ? user.name ?? user.firstname ?? "User"
                     : `${mockUser[0]?.firstname} ${mockUser[0]?.lastname}`}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                   {user?.roles?.[0] ||
-                    (Array.isArray(authUser?.metadata?.roles)
-                      ? String(authUser?.metadata?.roles[0])
+                    (Array.isArray(user?.roles)
+                      ? String(user?.roles[0])
+                      : Array.isArray(user?.metadata?.roles)
+                      ? String(user?.metadata?.roles[0])
                       : mockUser[0]?.roles?.[0] || "Project Manager")}
                 </p>
               </div>

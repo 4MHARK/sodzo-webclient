@@ -9,12 +9,11 @@ import { ENV_CONFIG } from "./env";
 import { extractRateLimitInfo, getSecondsUntilReset } from "./rateLimit";
 
 // Vite env: use VITE_API_BASE for flexible dev/prod bases.
-// For local development we recommend setting VITE_API_BASE=/v1 and using the Vite proxy (see vite.config.ts).
-// Prefer explicit VITE_API_BASE, otherwise use a dev-relative path when in development
-// so the Vite proxy forwards requests to the staging API and avoids CORS.
+// TEMPORARY: Using direct staging API URL for testing (proxy has issues)
+// If CORS issues occur, we can switch back to /v1 proxy or fix proxy config
+// Force direct URL - do not use proxy
 export const API_BASE =
-  (import.meta.env.VITE_API_BASE as string) ??
-  (import.meta.env.DEV ? "/v1" : "https://api.stg.saby.ai/v1");
+  (import.meta.env.VITE_API_BASE as string) || "https://api.stg.saby.ai/v1";
 
 // API Endpoints from environment variables
 export const API_ENDPOINTS = {
@@ -67,12 +66,14 @@ export function createAPI(
         ] = `Bearer ${token}`;
       }
 
-      // For requests without token, add API key if available (for non-auth endpoints)
-      if (!token) {
-          const globalApiKey = getApiKeySync();
-          if (globalApiKey) {
-            (config.headers as Record<string, string>)["X-API-Key"] =
-              globalApiKey;
+      // For requests without token, add API key if available (for non-auth endpoints only)
+      // Do NOT add API key to auth endpoints (login, refresh, logout)
+      const isAuthEndpoint = config.url?.includes("/auth/") || false;
+      if (!token && !isAuthEndpoint) {
+        const globalApiKey = getApiKeySync();
+        if (globalApiKey) {
+          (config.headers as Record<string, string>)["X-API-Key"] =
+            globalApiKey;
         }
       }
 
@@ -112,9 +113,14 @@ export function createAPI(
 
   // doRefresh is the single place that actually calls the refresh endpoint and applies backoff on 429
   const doRefresh = async () => {
+    console.log("[🔍 TOKEN TRACK] Token refresh attempt started");
+
     if (inCooldown()) {
       const err: any = new Error("Refresh cooldown");
       err.status = 429;
+      console.log(
+        "[🔍 TOKEN TRACK] ❌ Token refresh blocked - cooldown active"
+      );
       throw err;
     }
     try {
@@ -136,14 +142,33 @@ export function createAPI(
         }
       }
 
+      console.log("[🔍 TOKEN TRACK] Token refresh - checking tokens:", {
+        refreshToken: {
+          inMemory: refreshToken ? `${refreshToken.substring(0, 20)}...` : null,
+          inMemoryExists: !!refreshToken,
+        },
+        legacy: {
+          inLocalStorage: legacy ? `${legacy.substring(0, 20)}...` : null,
+          inLocalStorageExists: !!legacy,
+        },
+        willUse: refreshToken ? "in-memory" : legacy ? "localStorage" : "none",
+      });
+
       // If no refreshToken is available, don't attempt refresh - backend requires it
       if (!refreshToken && !legacy) {
         const err: any = new Error("No refresh token available");
         err.status = 401;
+        console.log(
+          "[🔍 TOKEN TRACK] ❌ Token refresh failed - no refresh token available"
+        );
         throw err;
       }
 
       const body = refreshToken ? { refreshToken } : { refreshToken: legacy };
+      console.log(
+        "[🔍 TOKEN TRACK] Sending refresh request with token from:",
+        refreshToken ? "memory" : "localStorage"
+      );
 
       const resp = await axios.post(
         `${API_BASE}${API_ENDPOINTS.REFRESH}`,
@@ -153,16 +178,41 @@ export function createAPI(
           headers: { "Content-Type": "application/json" },
         }
       );
+
+      console.log("[🔍 TOKEN TRACK] ✅ Token refresh successful:", {
+        status: resp.status,
+        hasNewAccessToken: !!(
+          resp.data?.access?.token ||
+          resp.data?.access_token ||
+          resp.data?.token
+        ),
+        hasNewRefreshToken: !!(
+          resp.data?.refresh?.token ||
+          resp.data?.refresh_token ||
+          resp.data?.refreshToken
+        ),
+      });
+
       // reset backoff on success
       refreshBackoffMs = 10000;
       refreshCooldownUntil = 0;
       return resp;
     } catch (e: any) {
       const status = e?.response?.status ?? null;
+      console.log("[🔍 TOKEN TRACK] ❌ Token refresh failed:", {
+        status,
+        message: e?.message,
+        responseData: e?.response?.data,
+      });
+
       if (status === 429) {
         // apply exponential backoff
         refreshCooldownUntil = Date.now() + refreshBackoffMs;
         refreshBackoffMs = Math.min(refreshBackoffMs * 2, REFRESH_BACKOFF_MAX);
+        console.log("[🔍 TOKEN TRACK] Rate limited - applying backoff:", {
+          backoffMs: refreshBackoffMs,
+          cooldownUntil: new Date(refreshCooldownUntil).toISOString(),
+        });
       }
       throw e;
     }
@@ -330,8 +380,30 @@ export function createAPI(
       }
 
       // On 401 attempt one refresh (cookie-based). If it fails, call onAuthFailure (logout) and reject.
-      if (err.response?.status === 401 && !originalConfig._retry) {
+      // EXCEPTION: Don't attempt refresh for logout requests - if logout fails, just ignore it
+      const isLogoutRequest =
+        originalConfig.url?.includes(API_ENDPOINTS.LOGOUT) || false;
+
+      if (
+        err.response?.status === 401 &&
+        !originalConfig._retry &&
+        !isLogoutRequest
+      ) {
+        console.log(
+          "[🔍 TOKEN TRACK] 401 Unauthorized detected - checking for refresh token"
+        );
+        console.log("[🔍 TOKEN TRACK] Request that failed:", {
+          url: originalConfig.url,
+          method: originalConfig.method,
+          endpoint: originalConfig.url?.includes("/auth/")
+            ? "auth endpoint"
+            : "protected endpoint",
+        });
+
         if (isRefreshing) {
+          console.log(
+            "[🔍 TOKEN TRACK] Refresh already in progress - queuing request"
+          );
           return new Promise((resolve, reject) => {
             failedQueue.push({ resolve, reject, config: originalConfig });
           }).then(() => api.request(originalConfig));
@@ -341,6 +413,52 @@ export function createAPI(
         isRefreshing = true;
 
         try {
+          // Check if refresh token exists before attempting refresh
+          const refreshToken = getRefreshToken ? getRefreshToken() : null;
+          let legacy: string | null = null;
+          try {
+            if (typeof localStorage !== "undefined") {
+              legacy = localStorage.getItem(LOCAL_REFRESH_KEY);
+            }
+          } catch (e) {
+            // localStorage unavailable
+          }
+
+          console.log("[🔍 TOKEN TRACK] 401 handler - refresh token check:", {
+            refreshToken: {
+              inMemory: refreshToken
+                ? `${refreshToken.substring(0, 20)}...`
+                : null,
+              inMemoryExists: !!refreshToken,
+            },
+            legacy: {
+              inLocalStorage: legacy ? `${legacy.substring(0, 20)}...` : null,
+              inLocalStorageExists: !!legacy,
+            },
+            willAttemptRefresh: !!(refreshToken || legacy),
+          });
+
+          // If no refresh token, immediately call onAuthFailure (terminal state)
+          if (!refreshToken && !legacy) {
+            console.log(
+              "[🔍 TOKEN TRACK] ❌ No refresh token available - triggering logout"
+            );
+            isRefreshing = false;
+            processQueue(err);
+            if (typeof onAuthFailure === "function") {
+              try {
+                onAuthFailure();
+              } catch (e) {
+                // ignore errors from callback
+              }
+            }
+            return Promise.reject(err);
+          }
+
+          console.log(
+            "[🔍 TOKEN TRACK] ✅ Refresh token found - attempting token refresh"
+          );
+
           // Use the guarded doRefresh which applies cooldown/backoff on 429
           const resp = await doRefresh();
 
@@ -353,14 +471,43 @@ export function createAPI(
               data?.access_token ??
               data?.token ??
               null;
-            if (newAccess && typeof setAccessToken === "function")
+            const newRefresh =
+              data?.refresh?.token ??
+              data?.tokens?.refresh?.token ??
+              data?.refresh_token ??
+              data?.refreshToken ??
+              null;
+
+            console.log("[🔍 TOKEN TRACK] Token refresh response received:", {
+              hasNewAccessToken: !!newAccess,
+              hasNewRefreshToken: !!newRefresh,
+              accessTokenPreview: newAccess
+                ? `${newAccess.substring(0, 20)}...`
+                : null,
+              refreshTokenPreview: newRefresh
+                ? `${newRefresh.substring(0, 20)}...`
+                : null,
+            });
+
+            if (newAccess && typeof setAccessToken === "function") {
               setAccessToken(newAccess);
+              console.log("[🔍 TOKEN TRACK] ✅ Updated access token in memory");
+            }
+
+            // Note: New refresh token will be handled by handleSuccessfulAuth callback
           } catch (e) {
             // ignore parsing errors
+            console.log(
+              "[🔍 TOKEN TRACK] ⚠️ Error parsing refresh response:",
+              e
+            );
           }
 
           processQueue(null);
           isRefreshing = false;
+          console.log(
+            "[🔍 TOKEN TRACK] ✅ Token refresh complete - retrying original request"
+          );
 
           // Retry the original request once after refresh
           // Update Authorization header with new token
@@ -372,12 +519,26 @@ export function createAPI(
           }
           return api.request(originalConfig);
         } catch (refreshErr) {
+          console.log(
+            "[🔍 TOKEN TRACK] ❌ Token refresh failed in 401 handler:",
+            {
+              status: (refreshErr as any)?.response?.status,
+              message: (refreshErr as any)?.message,
+              willTriggerLogout: true,
+            }
+          );
+
           processQueue(refreshErr);
           isRefreshing = false;
 
           // Notify caller to clear session state (frontend should clear in-memory user state)
           try {
-            if (typeof onAuthFailure === "function") onAuthFailure();
+            if (typeof onAuthFailure === "function") {
+              console.log(
+                "[🔍 TOKEN TRACK] Calling onAuthFailure callback (will trigger logout)"
+              );
+              onAuthFailure();
+            }
           } catch (e) {
             // ignore errors from callback
           }

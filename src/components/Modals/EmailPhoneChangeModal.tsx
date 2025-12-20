@@ -10,8 +10,8 @@ import {
   RefreshCw,
   ShieldCheck,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
-import { useUser } from "../../contexts/UserContext";
 import toast from "react-hot-toast";
 
 interface EmailPhoneChangeModalProps {
@@ -29,8 +29,8 @@ export default function EmailPhoneChangeModal({
   currentValue,
   onSuccess,
 }: EmailPhoneChangeModalProps) {
-  const { api, logout, user: authUser } = useAuth();
-  const { user } = useUser();
+  const queryClient = useQueryClient();
+  const { api, logout, user } = useAuth();
   const [step, setStep] = useState<"password" | "otp" | "newValue">("password");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState<string[]>(["", "", "", "", "", ""]);
@@ -42,8 +42,8 @@ export default function EmailPhoneChangeModal({
   const [countdown, setCountdown] = useState(0);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Get user email from auth context or user context
-  const userEmail = authUser?.email || user?.email || "";
+  // Get user email from auth context
+  const userEmail = user?.email || "";
 
   // Helper function to mask phone number - show first 3 digits and last 2 digits
   const maskPhoneNumber = (phone?: string): string => {
@@ -238,6 +238,9 @@ export default function EmailPhoneChangeModal({
         [type === "email" ? "email" : "phone"]: newValue,
         // OTP is already verified in handleOTPVerification step, no need to send it again
       });
+
+      // Invalidate React Query cache to ensure fresh data on next fetch
+      queryClient.invalidateQueries({ queryKey: ["userProfile", user?.id] });
 
       toast.success(
         `${type === "email" ? "Email" : "Phone number"} updated successfully!`
@@ -473,7 +476,9 @@ export default function EmailPhoneChangeModal({
                       whileHover={{
                         scale: otp.join("").length === 6 ? 1.02 : 1,
                       }}
-                      whileTap={{ scale: otp.join("").length === 6 ? 0.98 : 1 }}
+                      whileTap={{
+                        scale: otp.join("").length === 6 ? 0.98 : 1,
+                      }}
                       className="w-full py-3.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed mb-4 shadow-lg shadow-green-500/30 flex items-center justify-center gap-2">
                       {loading ? (
                         <>

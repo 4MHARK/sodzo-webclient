@@ -3,9 +3,8 @@ import { Menu, Bell, Search, User, Globe, LogOut, Lock } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate, Link } from "react-router-dom";
 import toast from "react-hot-toast";
-import ThemeToggle from '../UI/ThemeToggle';
-import { useUser } from '../../contexts/UserContext';
-import { useAuth } from '../../contexts/AuthContext';
+import ThemeToggle from "../UI/ThemeToggle";
+import { useAuth } from "../../contexts/AuthContext";
 import { getAvatarUrl } from "../../utils/env";
 import ChangePasswordModal from "../Modals/ChangePasswordModal";
 
@@ -15,8 +14,7 @@ interface HeaderProps {
 
 export default function Header({ onMenuClick }: HeaderProps) {
   // navigate not used here; keep import placeholder in case navigation is added later
-  const { user, logout: userLogout } = useUser();
-  const { user: authUser, logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [profileOpen, setProfileOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
@@ -103,7 +101,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
                     setProfileOpen(false);
                     // clear both auth and user contexts and redirect to auth page
                     logout();
-                    userLogout();
+                    logout();
                     navigate('/');
                   }}
                 >
@@ -113,18 +111,18 @@ export default function Header({ onMenuClick }: HeaderProps) {
             )}
           </div> */}
 
-          {/* Real User (prefer UserContext, fallback to AuthContext) */}
+          {/* User Profile */}
           <div className="relative" ref={profileRef}>
             <button
               className="flex items-center space-x-3 focus:outline-none"
               onClick={() => setProfileOpen((open) => !open)}>
               <img
-                src={getAvatarUrl(user?.avatar, authUser?.avatarUrl)}
+                src={getAvatarUrl(user?.avatar, user?.avatarUrl)}
                 alt={
                   user
                     ? `${user.firstname} ${user.lastname}`
-                    : authUser
-                    ? authUser.name ?? "User"
+                    : user
+                    ? user.name ?? user.firstname ?? "User"
                     : "User avatar"
                 }
                 className="w-8 h-8 rounded-full"
@@ -133,14 +131,16 @@ export default function Header({ onMenuClick }: HeaderProps) {
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                   {user
                     ? `${user.firstname} ${user.lastname}`
-                    : authUser
-                    ? authUser.name ?? "User"
+                    : user
+                    ? user.name ?? user.firstname ?? "User"
                     : "User"}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   {user?.roles?.[0] ||
-                    (Array.isArray(authUser?.metadata?.roles)
-                      ? String(authUser?.metadata?.roles[0])
+                    (Array.isArray(user?.roles)
+                      ? String(user?.roles[0])
+                      : Array.isArray(user?.metadata?.roles)
+                      ? String(user?.metadata?.roles[0])
                       : "Project Manager")}
                 </p>
               </div>
@@ -157,14 +157,16 @@ export default function Header({ onMenuClick }: HeaderProps) {
                   <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                     {user
                       ? `${user.firstname} ${user.lastname}`
-                      : authUser
-                      ? authUser.name ?? "User"
+                      : user
+                      ? user.name ?? user.firstname ?? "User"
                       : "User"}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                     {user?.roles?.[0] ||
-                      (Array.isArray(authUser?.metadata?.roles)
-                        ? String(authUser?.metadata?.roles[0])
+                      (Array.isArray(user?.roles)
+                        ? String(user?.roles[0])
+                        : Array.isArray(user?.metadata?.roles)
+                        ? String(user?.metadata?.roles[0])
                         : "Project Manager")}
                   </p>
                 </div>
@@ -202,15 +204,8 @@ export default function Header({ onMenuClick }: HeaderProps) {
                     className="flex items-center w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                     onClick={() => {
                       setProfileOpen(false);
-                      // clear both auth and user contexts
-                      try {
-                        logout();
-                      } catch {}
-                      try {
-                        userLogout();
-                      } catch {}
-                      // redirect to landing page
-                      navigate("/");
+                      // logout() handles all cleanup and redirect internally
+                      logout();
                     }}>
                     <LogOut className="w-4 h-4 mr-3" />
                     Logout

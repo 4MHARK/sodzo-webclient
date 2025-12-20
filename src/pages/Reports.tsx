@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
-import { useUser } from "../contexts/UserContext";
-import type { User as UserModel } from "../contexts/UserContext";
+import type { User } from "../contexts/AuthContext";
 import { Trophy, Shield, TrendingUp } from "lucide-react";
 import toast from "react-hot-toast";
 import { useDeviceDetection } from "../hooks/useDeviceDetection";
+import { motion } from "framer-motion";
 
 interface LeaderBoardUser {
   id: string;
@@ -28,82 +29,94 @@ interface ComplianceRecord {
 }
 
 export default function Reports() {
-  const { api, logout, user: authUser } = useAuth();
-  const { user: userContextUser } = useUser();
+  const { api, logout, user } = useAuth();
   const { isMobile } = useDeviceDetection();
   const [activeTab, setActiveTab] = useState<"leaderboard" | "compliance">(
     "leaderboard"
   );
-  const [leaderboard, setLeaderboard] = useState<LeaderBoardUser[]>([]);
-  const [compliance, setCompliance] = useState<ComplianceRecord[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  const user: Partial<UserModel> | null =
-    (authUser as unknown as Partial<UserModel>) ?? userContextUser ?? null;
   const userId = user?.id;
 
-  // Fetch leaderboard data
-  useEffect(() => {
-    const fetchLeaderboard = async () => {
-      if (activeTab !== "leaderboard") return;
+  // Fetch leaderboard data using React Query
+  const {
+    data: leaderboard = [],
+    isLoading: leaderboardLoading,
+    error: leaderboardError,
+  } = useQuery({
+    queryKey: ["leaderboard", userId],
+    queryFn: async () => {
+      if (!userId) return [];
 
-      try {
-        setLoading(true);
-        // TODO: Replace with actual leaderboard endpoint when available
-        // For now, this is a placeholder - you'll need to create this endpoint
-        // const res = await api.get(`/reports/leaderboard`);
-        // setLeaderboard(res.data?.results || res.data || []);
+      // TODO: Replace with actual leaderboard endpoint when available
+      // For now, this is a placeholder - you'll need to create this endpoint
+      // const res = await api.get(`/reports/leaderboard`);
+      // return res.data?.results || res.data || [];
 
-        // Placeholder: Fetch users as leaderboard data
-        if (userId) {
-          // Using a placeholder - replace with actual leaderboard endpoint
-          setLeaderboard([]);
-        }
-      } catch (err: any) {
-        if (err.response?.status === 401) {
-          logout();
-          toast.error("Session expired — please sign in again");
-        } else {
-          toast.error("Failed to load leaderboard");
-          console.error("Leaderboard fetch error:", err);
-        }
-      } finally {
-        setLoading(false);
+      // Placeholder: return empty array
+      return [];
+    },
+    enabled: activeTab === "leaderboard" && !!userId,
+    retry: (failureCount, error: any) => {
+      // Don't retry on 401 errors
+      if (error?.response?.status === 401) {
+        logout();
+        toast.error("Session expired — please sign in again");
+        return false;
       }
-    };
+      return failureCount < 2; // Retry up to 2 times
+    },
+  });
 
-    fetchLeaderboard();
-  }, [activeTab, userId, api, logout]);
+  // Fetch compliance data using React Query
+  const {
+    data: compliance = [],
+    isLoading: complianceLoading,
+    error: complianceError,
+  } = useQuery({
+    queryKey: ["compliance", userId],
+    queryFn: async () => {
+      if (!userId) return [];
 
-  // Fetch compliance data
-  useEffect(() => {
-    const fetchCompliance = async () => {
-      if (activeTab !== "compliance") return;
+      // TODO: Replace with actual compliance endpoint when available
+      // For now, this is a placeholder - you'll need to create this endpoint
+      // const res = await api.get(`/reports/compliance`);
+      // return res.data?.results || res.data || [];
 
-      try {
-        setLoading(true);
-        // TODO: Replace with actual compliance endpoint when available
-        // For now, this is a placeholder - you'll need to create this endpoint
-        // const res = await api.get(`/reports/compliance`);
-        // setCompliance(res.data?.results || res.data || []);
-
-        // Placeholder: empty compliance data
-        setCompliance([]);
-      } catch (err: any) {
-        if (err.response?.status === 401) {
-          logout();
-          toast.error("Session expired — please sign in again");
-        } else {
-          toast.error("Failed to load compliance data");
-          console.error("Compliance fetch error:", err);
-        }
-      } finally {
-        setLoading(false);
+      // Placeholder: return empty array
+      return [];
+    },
+    enabled: activeTab === "compliance" && !!userId,
+    retry: (failureCount, error: any) => {
+      // Don't retry on 401 errors
+      if (error?.response?.status === 401) {
+        logout();
+        toast.error("Session expired — please sign in again");
+        return false;
       }
-    };
+      return failureCount < 2; // Retry up to 2 times
+    },
+  });
 
-    fetchCompliance();
-  }, [activeTab, api, logout]);
+  // Determine loading state based on active tab
+  const loading =
+    activeTab === "leaderboard" ? leaderboardLoading : complianceLoading;
+
+  // Handle errors
+  if (leaderboardError && activeTab === "leaderboard") {
+    const axiosError = leaderboardError as any;
+    if (axiosError.response?.status !== 401) {
+      toast.error("Failed to load leaderboard");
+      console.error("Leaderboard fetch error:", leaderboardError);
+    }
+  }
+
+  if (complianceError && activeTab === "compliance") {
+    const axiosError = complianceError as any;
+    if (axiosError.response?.status !== 401) {
+      toast.error("Failed to load compliance data");
+      console.error("Compliance fetch error:", complianceError);
+    }
+  }
 
   const tabs = [
     {
@@ -376,7 +389,7 @@ export default function Reports() {
                 ) : isMobile ? (
                   /* Mobile Card View */
                   <div className="space-y-3">
-                    {compliance.map((record) => (
+                    {compliance.map((record, index) => (
                       <motion.div
                         key={record.id}
                         className="mobile-card rounded-xl p-4 border border-gray-200/50 dark:border-gray-600/50 floating-animation"

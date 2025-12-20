@@ -10,6 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tanstack/query-async-storage-persister": "^5.90.14",
+    "@tanstack/react-query": "^5.90.12",
+    "@tanstack/react-query-persist-client": "^5.90.14",
     "@types/react-router-dom": "^5.3.3",
     "axios": "^1.12.2",
     "dexie": "^4.2.1",

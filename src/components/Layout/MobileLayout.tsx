@@ -1,5 +1,5 @@
-import { Outlet, useLocation } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { Outlet } from "react-router-dom";
+import { motion } from "framer-motion";
 import { useState } from "react";
 import MobileHeader from "./MobileHeader";
 import BottomNavigation from "./BottomNavigation";
@@ -7,7 +7,6 @@ import Sidebar from "./Sidebar";
 import MoreDrawer from "../Mobile/MoreDrawer";
 
 export default function MobileLayout() {
-  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [moreDrawerOpen, setMoreDrawerOpen] = useState(false);
 
@@ -27,20 +26,16 @@ export default function MobileLayout() {
 
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900 pb-20 safe-area-content">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={location.pathname}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.2, ease: "easeInOut" }}
-            className="min-h-full">
-            {/* Content padding - responsive */}
-            <div className="p-4 max-w-full">
-              <Outlet />
-            </div>
-          </motion.div>
-        </AnimatePresence>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2, ease: "easeInOut" }}
+          className="min-h-full">
+          {/* Content padding - responsive */}
+          <div className="p-4 max-w-full">
+            <Outlet />
+          </div>
+        </motion.div>
       </main>
 
       {/* Bottom Navigation */}
