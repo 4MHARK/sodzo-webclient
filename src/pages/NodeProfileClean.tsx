@@ -94,7 +94,7 @@ export default function NodeProfileClean() {
       // Fetch both schema and actual node data in parallel
       const [schemaResponse, dataResponse] = await Promise.all([
         api.get(`/schema/node`).catch(() => null), // Schema is optional
-        api.get(`/node/${selectedNode.id}`),
+        api.get(`/node/${selectedNode.id}/branch`),
       ]);
 
       const fullNodeData = dataResponse.data;

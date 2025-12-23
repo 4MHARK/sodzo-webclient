@@ -307,30 +307,76 @@ export function createAPI(
       return res;
     },
     async (err: AxiosError & { config?: CustomRequestConfig }) => {
-      // Log failed API call to database
-      try {
-        const config = err.config as any;
-        const duration = config?.metadata?.startTime
-          ? Date.now() - config.metadata.startTime
-          : undefined;
-
-        await db.apiCalls.add({
-          endpoint: err.config?.url || "",
-          method: (err.config?.method || "GET").toUpperCase(),
-          status: err.response?.status || 0,
-          statusText: err.response?.statusText || "Network Error",
-          error: err.message,
-          timestamp: new Date(),
-          duration: duration,
-        });
-      } catch (error) {
-        // Silently fail logging - don't break error handling
-        if (import.meta.env.DEV) {
-          console.warn("[API] Failed to log API call error:", error);
-        }
-      }
       const originalConfig = err.config;
       if (!originalConfig) return Promise.reject(err);
+
+      // Handle CORS errors gracefully - these are backend configuration issues
+      // Check if this is a CORS error (no response, network error, or specific CORS message)
+      const errorMessage = err.message?.toLowerCase() || "";
+      const isCorsError =
+        !err.response &&
+        (errorMessage.includes("cors") ||
+          errorMessage.includes("access-control") ||
+          errorMessage.includes("preflight") ||
+          errorMessage.includes("access-control-allow-origin") ||
+          err.code === "ERR_NETWORK" ||
+          err.code === "ERR_FAILED");
+
+      if (isCorsError) {
+        const endpoint = originalConfig.url || "";
+        // Silently handle CORS errors for optional endpoints (like /storage/stats)
+        // These might not be available or configured on the backend
+        // NOTE: This is a backend CORS configuration issue. The backend needs to:
+        // 1. Add the frontend origin (https://stg.saby.ai) to allowed CORS origins
+        // 2. Include 'Access-Control-Allow-Origin' header in the response
+        // 3. Handle preflight OPTIONS requests properly
+        if (endpoint.includes("/storage/stats")) {
+          if (import.meta.env.DEV) {
+            console.debug(
+              "[API] CORS error for /storage/stats - endpoint may not be configured on backend. " +
+                "Backend needs to allow CORS from https://stg.saby.ai"
+            );
+          }
+          // Return a rejected promise with a silent error that won't show toasts
+          const corsError: any = new Error("CORS: Endpoint not available");
+          corsError.isCorsError = true;
+          corsError.silent = true; // Flag to prevent toast notifications
+          return Promise.reject(corsError);
+        }
+
+        // For other CORS errors, log in dev but don't spam console
+        if (import.meta.env.DEV) {
+          console.warn(
+            `[API] CORS error for ${endpoint}:`,
+            err.message || "CORS policy blocked request"
+          );
+        }
+      }
+
+      // Log failed API call to database (skip for silent CORS errors)
+      if (!isCorsError || !originalConfig.url?.includes("/storage/stats")) {
+        try {
+          const config = err.config as any;
+          const duration = config?.metadata?.startTime
+            ? Date.now() - config.metadata.startTime
+            : undefined;
+
+          await db.apiCalls.add({
+            endpoint: err.config?.url || "",
+            method: (err.config?.method || "GET").toUpperCase(),
+            status: err.response?.status || 0,
+            statusText: err.response?.statusText || "Network Error",
+            error: err.message,
+            timestamp: new Date(),
+            duration: duration,
+          });
+        } catch (error) {
+          // Silently fail logging - don't break error handling
+          if (import.meta.env.DEV) {
+            console.warn("[API] Failed to log API call error:", error);
+          }
+        }
+      }
 
       // Handle 429 Rate Limit errors (before other error checks)
       if (err.response?.status === 429) {

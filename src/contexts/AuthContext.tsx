@@ -8,7 +8,7 @@ import {
   useEffect,
 } from "react";
 import axios from "axios";
-import { createAPI, API_ENDPOINTS, API_BASE } from "../utils/api";
+import { createAPI, API_ENDPOINTS } from "../utils/api";
 import type { AxiosInstance } from "axios";
 import { TokenManager } from "../utils/tokenManager";
 import { extractExpirationFromResponse } from "../utils/tokenUtils";
@@ -309,7 +309,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       })();
 
-      if (userResp) setUser(userResp);
+      if (userResp) {
+        // Ensure user has 'id' field (normalize _id to id if needed)
+        const normalizedUser = {
+          ...userResp,
+          id: userResp.id || (userResp as any)._id || userResp.userId || null,
+        };
+        setUser(normalizedUser);
+        console.log("[🔍 TOKEN TRACK] User set:", {
+          hasId: !!normalizedUser.id,
+          id: normalizedUser.id,
+          email: normalizedUser.email,
+        });
+      }
       if (accessToken) setTokenStateSafe(accessToken);
       if (newRefresh) {
         refreshTokenRef.current = newRefresh;
@@ -485,8 +497,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Fire-and-forget: does NOT block logout completion, errors are ignored
       // Logout errors (401, 400, etc.) are expected if token is expired/invalid - just ignore them
       if (refreshToken) {
-        const fullLogoutUrl = `${API_BASE}${API_ENDPOINTS.LOGOUT}`;
-
         // Silent logout - no verbose logging in production
         if (import.meta.env.DEV) {
           console.debug("[AuthContext] Preparing logout API call");
@@ -688,8 +698,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           console.log(
             "[🔍 TOKEN TRACK] ⚠️ Silent refresh skipped - no refresh token available"
           );
+          // Ensure state is ANONYMOUS if no refresh token available
+          if (authState !== "ANONYMOUS") {
+            setAuthState("ANONYMOUS");
+          }
           return; // User remains unauthenticated, no refresh token available
         }
+
+        // Set state to REFRESHING before attempting refresh to prevent premature redirects
+        console.log(
+          "[🔍 TOKEN TRACK] Setting auth state to REFRESHING before silent refresh"
+        );
+        setAuthState("REFRESHING");
 
         console.log("[🔍 TOKEN TRACK] Attempting silent refresh...");
         const doRefresh = (apiRef.current as any)?._doRefresh as
@@ -706,7 +726,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 "[🔍 TOKEN TRACK] ❌ Silent refresh failed:",
                 err?.message
               );
-              // ignore; user remains unauthenticated
+              // Set state to ANONYMOUS on failure - user will be redirected to login
+              setAuthState("ANONYMOUS");
             });
         } else {
           // Fallback: call refresh endpoint directly
@@ -729,19 +750,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 "[🔍 TOKEN TRACK] ❌ Fallback silent refresh failed:",
                 err?.message
               );
-              // ignore
+              // Set state to ANONYMOUS on failure - user will be redirected to login
+              setAuthState("ANONYMOUS");
             });
         }
       } catch (e) {
         console.log("[🔍 TOKEN TRACK] ❌ Silent refresh error:", e);
-        // swallow
+        // Set state to ANONYMOUS on error
+        setAuthState("ANONYMOUS");
       }
     } else {
       console.log(
         "[🔍 TOKEN TRACK] Silent refresh skipped - user and access token both exist"
       );
     }
-  }, [user, handleSuccessfulAuth, getAccessToken]);
+  }, [user, handleSuccessfulAuth, getAccessToken, authState]);
 
   const logout = useCallback(() => {
     // User-initiated logout - use forceLogout with silent=true to suppress errors
@@ -837,7 +860,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Handle successful authentication (schedules proactive refresh, syncs tabs)
         handleSuccessfulAuth(resp);
 
-        setUser(userResp ?? null);
+        // Normalize user object to ensure 'id' field exists
+        if (userResp) {
+          const normalizedUser = {
+            ...userResp,
+            id: userResp.id || (userResp as any)._id || userResp.userId || null,
+          };
+          setUser(normalizedUser);
+          console.log("[AuthContext] Login - User normalized and set:", {
+            hasId: !!normalizedUser.id,
+            id: normalizedUser.id,
+            email: normalizedUser.email,
+          });
+        } else {
+          setUser(null);
+        }
 
         console.log("[🔍 TOKEN TRACK] Login complete - user state updated");
 
