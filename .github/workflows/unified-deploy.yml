@@ -148,13 +148,35 @@ jobs:
 
       - name: Verify live bundle
         run: |
-          ASSET_PATH="$(curl -fsSL https://web.saby.ai | grep -oE 'assets/[^\" ]+\\.js' | head -n 1)"
+          ASSET_PATH=""
+          for i in $(seq 1 20); do
+            ASSET_PATH="$(curl -fsSL https://web.saby.ai | grep -oE 'assets/[^\" ]+\\.js' | head -n 1 || true)"
+            if [ -n "$ASSET_PATH" ]; then
+              break
+            fi
+            echo "⏳ Waiting for web.saby.ai to become ready (attempt $i/20)..."
+            sleep 3
+          done
+
           if [ -z "$ASSET_PATH" ]; then
-            echo "❌ Could not find JS asset path on web.saby.ai"
+            echo "❌ Could not find JS asset path on web.saby.ai after retries"
             exit 1
           fi
 
-          BUNDLE="$(curl -fsSL "https://web.saby.ai/${ASSET_PATH}")"
+          BUNDLE=""
+          for i in $(seq 1 20); do
+            BUNDLE="$(curl -fsSL "https://web.saby.ai/${ASSET_PATH}" || true)"
+            if [ -n "$BUNDLE" ]; then
+              break
+            fi
+            echo "⏳ Waiting for JS bundle to become readable (attempt $i/20)..."
+            sleep 3
+          done
+          if [ -z "$BUNDLE" ]; then
+            echo "❌ Could not fetch live JS bundle after retries"
+            exit 1
+          fi
+
           echo "$BUNDLE" | grep -q "https://api.saby.ai/v1"
           if echo "$BUNDLE" | grep -q "api.stg.saby.ai"; then
             echo "❌ Staging API URL still detected on live web bundle."
