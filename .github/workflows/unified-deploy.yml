@@ -1,35 +1,27 @@
-name: WebClient CI/CD Pipeline - Unified VM
+name: WebClient CI/CD Pipeline - Production
 
 on:
   workflow_dispatch:
-    inputs:
-      environment:
-        description: "Environment to deploy to"
-        required: true
-        default: "staging"
-        type: choice
-        options:
-          - staging
-          - production
-          - proddy
   push:
-    branches: [Alpha, production, staging, proddy]
+    branches: [production, proddy]
   pull_request:
-    branches: [Alpha, production, staging, proddy]
+    branches: [production, proddy]
+
+concurrency:
+  group: webclient-production-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   NODE_VERSION: "18"
   REGISTRY: ghcr.io
   IMAGE_NAME: fadebowaley/sabywebclient
+  VITE_API_BASE: https://api.saby.ai/v1
 
 permissions:
-  contents: write
+  contents: read
   packages: write
 
 jobs:
-  # ═══════════════════════════════════════════════════════════════════
-  # BUILD, TEST & PUSH
-  # ═══════════════════════════════════════════════════════════════════
   build-test-docker:
     runs-on: ubuntu-latest
     steps:
@@ -44,24 +36,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Determine build environment
-        id: build-env
+      - name: Build application (production API base)
         run: |
-          if [[ "${{ github.ref }}" == "refs/heads/proddy" ]] || [[ "${{ github.ref }}" == "refs/heads/production" ]]; then
-            echo "ENVIRONMENT=production" >> $GITHUB_OUTPUT
-            echo "VITE_API_BASE=https://api.stg.saby.ai/v1" >> $GITHUB_OUTPUT
-            echo "IMAGE_TAG=production" >> $GITHUB_OUTPUT
-          else
-            echo "ENVIRONMENT=staging" >> $GITHUB_OUTPUT
-            echo "VITE_API_BASE=https://api.stg.saby.ai/v1" >> $GITHUB_OUTPUT
-            echo "IMAGE_TAG=staging" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Build application
-        run: |
-          echo "=== BUILDING FOR ${{ steps.build-env.outputs.ENVIRONMENT }} ==="
-          VITE_API_BASE="${{ steps.build-env.outputs.VITE_API_BASE }}" \
-          npm run build
+          echo "=== BUILDING WEBCLIENT FOR PRODUCTION API ==="
+          VITE_API_BASE="${{ env.VITE_API_BASE }}" npm run build
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -79,210 +57,111 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
+            type=raw,value=production
+            type=sha,prefix=sha-
             type=ref,event=branch
-            type=ref,event=pr
-            type=sha,prefix={{branch}}-
-            type=raw,value=${{ steps.build-env.outputs.IMAGE_TAG }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
           build-args: |
-            VITE_API_BASE=${{ steps.build-env.outputs.VITE_API_BASE }}
+            VITE_API_BASE=${{ env.VITE_API_BASE }}
 
-  # ═══════════════════════════════════════════════════════════════════
-  # DEPLOY TO UNIFIED STAGING VM
-  # ═══════════════════════════════════════════════════════════════════
-  # DISABLED: Staging deployment is disabled - only production deployments are active
-  deploy-staging:
-    needs: build-test-docker
-    runs-on: ubuntu-latest
-    if: false  # Staging deployment disabled
-    steps:
-      - name: 🔐 Prepare SSH key
-        run: |
-          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ] || [ -z "${{ secrets.NEW_STAGING_IP }}" ]; then
-            echo "❌ SSH secrets not configured. Add SSH_PRIVATE_KEY and NEW_STAGING_IP."
-            exit 1
-          fi
-          # Write key with trailing newline preserved
-          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/ssh_key
-          chmod 600 /tmp/ssh_key
-          eval "$(ssh-agent -s)"
-          ssh-add /tmp/ssh_key
-
-      - name: 🔐 Test SSH connectivity (staging, debug)
-        run: |
-          ssh -vvv -i /tmp/ssh_key \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=no \
-            -o UserKnownHostsFile=/dev/null \
-            haloadmin@${{ secrets.NEW_STAGING_IP }} "echo 'SSH OK to staging'" || exit 1
-
-      - name: 🚀 Deploy to Unified Staging VM
-        run: |
-          echo "🚀 Deploying webclient to UNIFIED Staging VM"
-          echo "🐳 Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:staging"
-
-          ssh -i /tmp/ssh_key \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=no \
-            -o UserKnownHostsFile=/dev/null \
-            haloadmin@${{ secrets.NEW_STAGING_IP }} << 'ENDSSH'
-            set -e
-            cd /opt/saby
-            
-            echo "🔐 Logging in to GHCR..."
-            if [ -n "${{ secrets.GHCR_PAT }}" ]; then
-              echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u fadebowaley --password-stdin
-            else
-              echo "⚠️ GHCR_PAT not set, using GITHUB_TOKEN..."
-              echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            fi
-            
-            echo "📥 Pulling latest webclient image (no cache)..."
-            COMPOSE_PROJECT_NAME=saby-staging docker-compose -f docker-compose.staging.yml pull --no-parallel webclient
-            
-            echo "🛑 Stopping old webclient container..."
-            COMPOSE_PROJECT_NAME=saby-staging docker-compose -f docker-compose.staging.yml stop webclient || true
-            
-            echo "🗑️ Removing old webclient container..."
-            COMPOSE_PROJECT_NAME=saby-staging docker-compose -f docker-compose.staging.yml rm -f webclient || true
-            
-            echo "🚀 Starting new webclient container..."
-            COMPOSE_PROJECT_NAME=saby-staging docker-compose -f docker-compose.staging.yml up -d --force-recreate webclient
-            
-            echo "⏳ Waiting for webclient to start..."
-            sleep 15
-            
-            echo "🏥 Health check..."
-            COMPOSE_PROJECT_NAME=saby-staging docker-compose -f docker-compose.staging.yml ps webclient
-          ENDSSH
-
-  # ═══════════════════════════════════════════════════════════════════
-  # DEPLOY TO UNIFIED PRODUCTION VM
-  # ═══════════════════════════════════════════════════════════════════
   deploy-production:
     needs: build-test-docker
     runs-on: ubuntu-latest
-    if: |
-      github.ref == 'refs/heads/proddy' ||
-      github.ref == 'refs/heads/production' ||
-      (github.event_name == 'workflow_dispatch' && (github.event.inputs.environment == 'production' || github.event.inputs.environment == 'proddy'))
+    if: github.event_name != 'pull_request'
     steps:
-      - name: 🔐 Prepare SSH key
+      - name: Resolve production host and user
         run: |
-          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ] || [ -z "${{ secrets.NEW_STAGING_IP }}" ]; then
-            echo "❌ SSH secrets not configured. Add SSH_PRIVATE_KEY and NEW_STAGING_IP."
+          PROD_HOST="${{ secrets.PRODUCTION_IP }}"
+          if [ -z "$PROD_HOST" ]; then
+            echo "❌ Missing host secret. Set PRODUCTION_IP."
+            exit 1
+          fi
+
+          SSH_USER="${{ secrets.PROD_SSH_USER }}"
+          if [ -z "$SSH_USER" ]; then
+            SSH_USER="saby"
+          fi
+
+          echo "PROD_HOST=$PROD_HOST" >> "$GITHUB_ENV"
+          echo "SSH_USER=$SSH_USER" >> "$GITHUB_ENV"
+
+      - name: Prepare SSH key
+        run: |
+          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
+            echo "❌ SSH_PRIVATE_KEY secret is not configured."
             exit 1
           fi
           printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/ssh_key
           chmod 600 /tmp/ssh_key
-          eval "$(ssh-agent -s)"
-          ssh-add /tmp/ssh_key
 
-      - name: 🔐 Test SSH connectivity (production)
+      - name: Test SSH connectivity
         run: |
-          ssh -vvv -i /tmp/ssh_key \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=no \
-            -o UserKnownHostsFile=/dev/null \
-            haloadmin@${{ secrets.NEW_STAGING_IP }} "echo 'SSH OK to production host'" || exit 1
-
-      - name: 🚀 Deploy to Unified Production VM
-        run: |
-          echo "🚀 Deploying webclient to UNIFIED Production VM"
-          echo "🌿 Branch: ${{ github.ref }}"
-          echo "🐳 Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production"
-
           ssh -i /tmp/ssh_key \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null \
-            haloadmin@${{ secrets.NEW_STAGING_IP }} << 'ENDSSH'
-            set -e
+            "${SSH_USER}@${PROD_HOST}" "echo 'SSH OK to production host'; hostname"
+
+      - name: Deploy web portal container
+        run: |
+          echo "🚀 Deploying ${REGISTRY}/${IMAGE_NAME}:production to ${SSH_USER}@${PROD_HOST}"
+          ssh -i /tmp/ssh_key \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            "${SSH_USER}@${PROD_HOST}" << 'ENDSSH'
+            set -euo pipefail
             cd /opt/saby
-            
-            echo "💾 Checking disk space..."
-            df -h /
-            
-            echo "🧹 Cleaning up Docker resources to free space..."
-            # Remove unused containers
-            docker container prune -f || true
-            
-            # Remove unused images (keep last 2 versions)
-            docker image prune -a -f --filter "until=24h" || true
-            
-            # Remove unused volumes
-            docker volume prune -f || true
-            
-            # Remove build cache
-            docker builder prune -af || true
-            
-            # Clean up old Docker logs
-            sudo journalctl --vacuum-time=7d || true
-            
-            echo "💾 Disk space after cleanup:"
-            df -h /
-            
-            # Check if we have enough space (at least 1GB free)
-            AVAILABLE_SPACE=$(df / | tail -1 | awk '{print $4}')
-            if [ "$AVAILABLE_SPACE" -lt 1048576 ]; then
-              echo "⚠️ WARNING: Low disk space detected. Available: ${AVAILABLE_SPACE}KB"
-              echo "💡 Consider manual cleanup on the server if deployment fails"
-            else
-              echo "✅ Sufficient disk space available: ${AVAILABLE_SPACE}KB"
-            fi
-            
-            echo "🔐 Logging in to GHCR..."
-            # Use a temporary location for Docker config if home directory is full
+
             export DOCKER_CONFIG=/tmp/.docker
-            mkdir -p $DOCKER_CONFIG
-            
+            mkdir -p "$DOCKER_CONFIG"
+
             if [ -n "${{ secrets.GHCR_PAT }}" ]; then
               echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u fadebowaley --password-stdin
             else
-              echo "⚠️ GHCR_PAT not set, using GITHUB_TOKEN..."
-              echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+              echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
             fi
-            
-            echo "📥 Pulling latest webclient image (no cache)..."
-            COMPOSE_PROJECT_NAME=saby-production docker-compose -f docker-compose.production.yml pull --no-parallel webclient
-            
-            echo "🛑 Stopping old webclient container..."
-            COMPOSE_PROJECT_NAME=saby-production docker-compose -f docker-compose.production.yml stop webclient || true
-            
-            echo "🗑️ Removing old webclient container..."
-            COMPOSE_PROJECT_NAME=saby-production docker-compose -f docker-compose.production.yml rm -f webclient || true
-            
-            echo "🚀 Starting new webclient container..."
-            COMPOSE_PROJECT_NAME=saby-production docker-compose -f docker-compose.production.yml up -d --force-recreate webclient
-            
-            echo "⏳ Waiting for webclient to start..."
-            sleep 15
-            
-            echo "🏥 Health check..."
-            COMPOSE_PROJECT_NAME=saby-production docker-compose -f docker-compose.production.yml ps webclient
-            
-            echo "📊 Testing webclient endpoint..."
-            curl -I http://localhost:3001 || echo "⚠️ WebClient not responding yet, may need more time"
-            
-            echo "📝 Recent logs:"
-            docker logs saby-webclient-app --tail 20 || true
-            
-            echo "✅ WebClient deployment completed!"
+
+            export WEBPORTAL_IMAGE=ghcr.io/fadebowaley/sabywebclient:production
+            docker compose -f docker-compose.yml pull webportal
+            docker compose -f docker-compose.yml up -d --no-deps --force-recreate webportal
+            docker compose -f docker-compose.yml ps webportal
+            docker logs --tail 50 saby-webportal || true
+
+            docker exec saby-webportal sh -lc "grep -R -n 'https://api\\.saby\\.ai/v1' /usr/share/nginx/html/assets/index-*.js | head -n 1"
+            if docker exec saby-webportal sh -lc "grep -R -n 'api\\.stg\\.saby\\.ai' /usr/share/nginx/html/assets/index-*.js >/dev/null"; then
+              echo "❌ Staging API URL still present in built bundle."
+              exit 1
+            fi
           ENDSSH
 
-      - name: ✅ Deployment Summary
+      - name: Verify live bundle
         run: |
-          echo "✅ WebClient deployed to unified production VM"
-          echo "🌐 Accessible at: https://web.saby.ai"
+          ASSET_PATH="$(curl -fsSL https://web.saby.ai | grep -oE 'assets/[^\" ]+\\.js' | head -n 1)"
+          if [ -z "$ASSET_PATH" ]; then
+            echo "❌ Could not find JS asset path on web.saby.ai"
+            exit 1
+          fi
 
+          BUNDLE="$(curl -fsSL "https://web.saby.ai/${ASSET_PATH}")"
+          echo "$BUNDLE" | grep -q "https://api.saby.ai/v1"
+          if echo "$BUNDLE" | grep -q "api.stg.saby.ai"; then
+            echo "❌ Staging API URL still detected on live web bundle."
+            exit 1
+          fi
+
+      - name: Deployment summary
+        run: |
+          echo "✅ WebClient production deployment completed."
+          echo "🌐 https://web.saby.ai now targets https://api.saby.ai/v1"

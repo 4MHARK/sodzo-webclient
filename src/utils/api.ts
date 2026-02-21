@@ -9,11 +9,9 @@ import { ENV_CONFIG } from "./env";
 import { extractRateLimitInfo, getSecondsUntilReset } from "./rateLimit";
 
 // Vite env: use VITE_API_BASE for flexible dev/prod bases.
-// TEMPORARY: Using direct staging API URL for testing (proxy has issues)
-// If CORS issues occur, we can switch back to /v1 proxy or fix proxy config
-// Force direct URL - do not use proxy
+// Default to production API to avoid accidental staging calls in production builds.
 export const API_BASE =
-  (import.meta.env.VITE_API_BASE as string) || "https://api.stg.saby.ai/v1";
+  (import.meta.env.VITE_API_BASE as string) || "https://api.saby.ai/v1";
 
 // API Endpoints from environment variables
 export const API_ENDPOINTS = {
