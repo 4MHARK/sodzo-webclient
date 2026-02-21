@@ -150,7 +150,7 @@ jobs:
         run: |
           ASSET_PATH=""
           for i in $(seq 1 20); do
-            ASSET_PATH="$(curl -fsSL https://web.saby.ai | grep -oE 'assets/[^\" ]+\\.js' | head -n 1 || true)"
+            ASSET_PATH="$(curl -fsSL --connect-timeout 5 --max-time 10 https://web.saby.ai | grep -oE 'assets/[^\" ]+\\.js' | head -n 1 || true)"
             if [ -n "$ASSET_PATH" ]; then
               break
             fi
@@ -165,7 +165,7 @@ jobs:
 
           BUNDLE=""
           for i in $(seq 1 20); do
-            BUNDLE="$(curl -fsSL "https://web.saby.ai/${ASSET_PATH}" || true)"
+            BUNDLE="$(curl -fsSL --connect-timeout 5 --max-time 10 "https://web.saby.ai/${ASSET_PATH}" || true)"
             if [ -n "$BUNDLE" ]; then
               break
             fi
