@@ -5,6 +5,7 @@ import { useDeviceDetection } from "../../hooks/useDeviceDetection";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import MobileLayout from "./MobileLayout";
+import { ChatBubble } from "../Chat";
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -67,6 +68,8 @@ export default function Layout() {
           </motion.div>
         </main>
       </div>
+      {/* Chat Bubble - Fixed bottom right */}
+      <ChatBubble variant="white" />
     </div>
   );
 }

@@ -9,8 +9,10 @@ import {
   Network,
   Calendar,
   BarChart3,
+  ShoppingBag,
   ChevronLeft,
   ChevronRight,
+  Heart,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { mockUser } from "../../data/mockData";
@@ -18,12 +20,14 @@ import { getAvatarUrl } from "../../utils/env";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
-  { name: "Projects", href: "/projects", icon: FolderOpen },
+  { name: "Modules", href: "/projects", icon: FolderOpen },
   { name: "Network", href: "/network", icon: Network },
   { name: "Calendar", href: "/calendar", icon: Calendar },
   { name: "Email Center", href: "/emails", icon: Mail },
   { name: "Cloud Storage", href: "/storage", icon: Cloud },
+  { name: "Givings", href: "/givings", icon: Heart },
   { name: "Reports", href: "/reports", icon: BarChart3 },
+  { name: "Store", href: "/store", icon: ShoppingBag },
   { name: "Admin", href: "/admin", icon: ShieldCheck, ownerOnly: true },
 ];
 

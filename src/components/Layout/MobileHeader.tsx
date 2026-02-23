@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, User, Globe, LogOut, X, ChevronLeft, Lock } from "lucide-react";
+import { Menu, User, Globe, LogOut, X, ChevronLeft, Lock, Users } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuth } from "../../contexts/AuthContext";
 import { getAvatarUrl } from "../../utils/env";
@@ -34,13 +34,14 @@ export default function MobileHeader({
 
     const pathToTitle: Record<string, string> = {
       "/dashboard": "Dashboard",
-      "/projects": "Projects",
+      "/projects": "Modules",
       "/network": "Network",
       "/calendar": "Calendar",
       "/emails": "Email Center",
       "/storage": "Cloud Storage",
       "/reports": "Reports",
       "/settings": "Settings",
+      "/team": "Team",
       "/admin": "Admin",
     };
 
@@ -178,6 +179,13 @@ export default function MobileHeader({
                         onClick={() => setProfileOpen(false)}>
                         <Globe className="w-4 h-4 mr-3 text-gray-500 dark:text-gray-400" />
                         Node Settings
+                      </Link>
+                      <Link
+                        to="/team"
+                        className="flex items-center px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors active:bg-gray-100 dark:active:bg-gray-600"
+                        onClick={() => setProfileOpen(false)}>
+                        <Users className="w-4 h-4 mr-3 text-gray-500 dark:text-gray-400" />
+                        Team
                       </Link>
                     </div>
 

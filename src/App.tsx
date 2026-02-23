@@ -10,7 +10,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import { Toaster } from "react-hot-toast";
 import Dashboard from "./pages/Dashboard";
 import Storage from "./pages/Storage";
-import Projects from "./pages/Projects";
+import FormModulesDashboard from "./pages/FormModulesDashboard";
 import FormRenderer from "./pages/FormRenderer";
 import Settings from "./pages/Settings";
 import Emails from "./pages/Emails";
@@ -19,6 +19,14 @@ import Landing from "./pages/Landing";
 import Network from "./pages/Network";
 import Calendar from "./pages/Calendar";
 import Reports from "./pages/Reports";
+import ECommerce from "./pages/ECommerce";
+import Team from "./pages/Team";
+import Givings from "./pages/Givings";
+import PaymentLink from "./pages/Givings/PaymentLink";
+import QRCode from "./pages/Givings/QRCode";
+import BankTransfer from "./pages/Givings/BankTransfer";
+import USSD from "./pages/Givings/USSD";
+import GivingsReports from "./pages/Givings/Reports";
 import { initializeDatabase } from "./utils/dbService";
 import { getApiKey, updateApiKeyCache } from "./utils/apiKeyStorage";
 
@@ -101,7 +109,7 @@ function App() {
               path="projects"
               element={
                 <ProtectedRoute>
-                  <Projects />
+                  <FormModulesDashboard />
                 </ProtectedRoute>
               }
             />
@@ -146,6 +154,14 @@ function App() {
               }
             />
             <Route
+              path="store"
+              element={
+                <ProtectedRoute>
+                  <ECommerce />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="forms/:formId"
               element={
                 <ProtectedRoute>
@@ -162,10 +178,66 @@ function App() {
               }
             />
             <Route
+              path="team"
+              element={
+                <ProtectedRoute>
+                  <Team />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="admin"
               element={
                 <ProtectedRoute>
                   <AdminSettings />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="givings"
+              element={
+                <ProtectedRoute>
+                  <Givings />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="givings/payment-link"
+              element={
+                <ProtectedRoute>
+                  <PaymentLink />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="givings/qr-code"
+              element={
+                <ProtectedRoute>
+                  <QRCode />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="givings/bank-transfer"
+              element={
+                <ProtectedRoute>
+                  <BankTransfer />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="givings/ussd"
+              element={
+                <ProtectedRoute>
+                  <USSD />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="givings/reports"
+              element={
+                <ProtectedRoute>
+                  <GivingsReports />
                 </ProtectedRoute>
               }
             />

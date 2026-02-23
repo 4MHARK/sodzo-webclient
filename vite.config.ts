@@ -17,10 +17,33 @@ export default defineConfig(({ mode }) => {
       proxy: {
         // Proxy /v1 requests to the staging API during local development to avoid CORS
         "/v1": {
-          target: env.VITE_API_PROXY_TARGET || "http://localhost:4000",
+          target: env.VITE_API_PROXY_TARGET || "https://api.saby.ai",
           changeOrigin: true,
-          secure: false,
-          rewrite: (path) => path.replace(/^\/v1/, "/v1"),
+          secure: true, // Use true for HTTPS
+          ws: false, // Disable WebSocket proxying
+          timeout: 30000, // 30 second timeout
+          configure: (proxy, _options) => {
+            proxy.on("error", (err, _req, _res) => {
+              console.error("[Vite Proxy] Error:", err.message);
+            });
+            proxy.on("proxyReq", (proxyReq, req, _res) => {
+              console.log(
+                "[Vite Proxy]",
+                req.method,
+                req.url,
+                "→",
+                proxyReq.path
+              );
+            });
+            proxy.on("proxyRes", (proxyRes, req, _res) => {
+              console.log(
+                "[Vite Proxy] Response:",
+                proxyRes.statusCode,
+                "for",
+                req.url
+              );
+            });
+          },
         },
       },
     },

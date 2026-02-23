@@ -1,0 +1,449 @@
+import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import { Search, Filter, Loader2, FileText, CheckCircle2, Activity, CreditCard, Shield } from "lucide-react";
+import { useAuth } from "../contexts/AuthContext";
+import { useDeviceDetection } from "../hooks/useDeviceDetection";
+import ModuleCard from "../components/FormModules/ModuleCard";
+import ModuleCardCompact from "../components/FormModules/ModuleCardCompact";
+import FormDrawer from "../components/FormModules/FormDrawer";
+import { mapFormsToModules, FormModuleData } from "../utils/formModuleMapper";
+import toast from "react-hot-toast";
+
+interface ProjectForm {
+  projectId: string;
+  configuration?: {
+    projectName?: string;
+    description?: string;
+    category?: string;
+  };
+  elements?: any[];
+  submissions?: any[];
+  updatedAt?: string;
+}
+
+export default function FormModulesDashboard() {
+  const { api } = useAuth();
+  const { isMobile } = useDeviceDetection();
+  const [loading, setLoading] = useState(true);
+  const [modules, setModules] = useState<FormModuleData[]>([]);
+  const [filteredModules, setFilteredModules] = useState<FormModuleData[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [selectedModule, setSelectedModule] = useState<FormModuleData | null>(null);
+  const [selectedForm, setSelectedForm] = useState<any | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [formLoading, setFormLoading] = useState(false);
+  const [formValues, setFormValues] = useState<Record<string, any>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Fetch forms from API
+  useEffect(() => {
+    const fetchForms = async () => {
+      try {
+        setLoading(true);
+        const response = await api.get("/project-forms/");
+        const forms: ProjectForm[] = response.data?.results || [];
+        const mappedModules = mapFormsToModules(forms);
+        
+        if (mappedModules.length === 0) {
+          toast.error("No modules available");
+        }
+        
+        setModules(mappedModules);
+        setFilteredModules(mappedModules);
+      } catch (error: any) {
+        console.error("Error fetching forms:", error);
+          toast.error("Failed to load modules");
+        setModules([]);
+        setFilteredModules([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchForms();
+  }, [api]);
+
+  // Filter modules
+  useEffect(() => {
+    let filtered = modules;
+
+    // Filter by category
+    if (selectedCategory !== "All") {
+      filtered = filtered.filter(
+        (module) => module.category === selectedCategory
+      );
+    }
+
+    // Filter by search term
+    if (searchTerm) {
+      filtered = filtered.filter(
+        (module) =>
+          module.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          module.description.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    setFilteredModules(filtered);
+  }, [searchTerm, selectedCategory, modules]);
+
+  // Get unique categories
+  const categories = ["All", ...Array.from(new Set(modules.map(m => m.category).filter(Boolean)))];
+
+  // Handle module click
+  const handleModuleClick = async (module: FormModuleData) => {
+    try {
+      setSelectedModule(module);
+      setFormLoading(true);
+      setDrawerOpen(true);
+      setFormValues({});
+
+      // Fetch form details from API
+      const response = await api.get(`/project-forms/project/${module.id}`);
+      setSelectedForm(response.data);
+    } catch (error: any) {
+      console.error("Error loading form:", error);
+      toast.error("Failed to load form");
+      setDrawerOpen(false);
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  // Handle form value change
+  const handleFormChange = (field: string, value: any) => {
+    setFormValues((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  // Handle form submission
+  const handleFormSubmit = async (values: Record<string, any>) => {
+    if (!selectedModule) return;
+    
+    try {
+      setIsSubmitting(true);
+      
+      // Submit form data to API
+      // TODO: Update endpoint when backend is ready
+      await api.post(`/project-forms/project/${selectedModule.id}/submit`, {
+        formData: values,
+      });
+      
+      toast.success("Module submitted successfully!");
+      setDrawerOpen(false);
+      setFormValues({});
+      setSelectedForm(null);
+    } catch (error: any) {
+      console.error("Error submitting form:", error);
+      toast.error(error.response?.data?.message || "Failed to submit module");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Close drawer
+  const handleCloseDrawer = () => {
+    setDrawerOpen(false);
+    setSelectedForm(null);
+    setFormValues({});
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-[60vh]">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 mobile:space-y-4 md:space-y-6">
+      {/* Header - Hidden on mobile */}
+      {!isMobile && (
+        <motion.div
+          className="flex flex-col sm:flex-row sm:items-center sm:justify-between"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              Modules
+            </h1>
+            <p className="text-gray-600 dark:text-gray-300 mt-1">
+              Access and fill out project modules
+            </p>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Mobile Header */}
+      {isMobile && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Modules
+          </h1>
+        </motion.div>
+      )}
+
+      {/* Search and Filter */}
+      <motion.div
+        className="flex flex-col sm:flex-row gap-3 mobile:gap-3 md:gap-4"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}>
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 mobile:w-4 mobile:h-4 md:w-5 md:h-5" />
+          <input
+            type="text"
+            placeholder="Search modules..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 mobile:pl-10 md:pl-10 pr-4 py-3 mobile:py-3 md:py-2 border border-gray-300 dark:border-gray-600 rounded-xl mobile:rounded-xl md:rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base mobile:text-base"
+          />
+        </div>
+        <div className="flex items-center space-x-2">
+          <Filter className="text-gray-400 w-4 h-4 mobile:w-4 mobile:h-4 md:w-5 md:h-5" />
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="flex-1 mobile:flex-1 md:flex-none px-3 py-3 mobile:py-3 md:py-2 border border-gray-300 dark:border-gray-600 rounded-xl mobile:rounded-xl md:rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base mobile:text-base touch-target">
+            {categories.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+        </div>
+      </motion.div>
+
+      {/* Stats */}
+      <motion.div
+        className="grid grid-cols-1 mobile:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 mobile:gap-3 md:gap-4"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}>
+        {/* Total Modules Card */}
+        <motion.div
+          className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all duration-300 overflow-hidden"
+          whileHover={{ y: -2, scale: 1.02 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}>
+          <div className="flex h-full">
+            {/* Icon Column - Left Side */}
+            <div className="flex items-center justify-center bg-blue-100 dark:bg-blue-900/20 min-w-[100px] w-24 flex-shrink-0">
+              <motion.div
+                whileHover={{ rotate: 5, scale: 1.1 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 10 }}>
+                <FileText className="w-12 h-12 text-blue-600 dark:text-blue-400" />
+              </motion.div>
+            </div>
+            
+            {/* Content Column - Right Side */}
+            <div className="flex-1 flex flex-col justify-center p-6 min-w-0">
+              <motion.h3
+                className="text-4xl font-bold text-gray-900 dark:text-white mb-1"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.3 }}>
+                {modules.length}
+              </motion.h3>
+              <p className="text-base font-medium text-gray-600 dark:text-gray-300">Total Modules</p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Available Modules Card */}
+        <motion.div
+          className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all duration-300 overflow-hidden"
+          whileHover={{ y: -2, scale: 1.02 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}>
+          <div className="flex h-full">
+            {/* Icon Column - Left Side */}
+            <div className="flex items-center justify-center bg-green-100 dark:bg-green-900/20 min-w-[100px] w-24 flex-shrink-0">
+              <motion.div
+                whileHover={{ rotate: 5, scale: 1.1 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 10 }}>
+                <CheckCircle2 className="w-12 h-12 text-green-600 dark:text-green-400" />
+              </motion.div>
+            </div>
+            
+            {/* Content Column - Right Side */}
+            <div className="flex-1 flex flex-col justify-center p-6 min-w-0">
+              <motion.h3
+                className="text-4xl font-bold text-gray-900 dark:text-white mb-1"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.35 }}>
+                {filteredModules.length}
+              </motion.h3>
+              <p className="text-base font-medium text-gray-600 dark:text-gray-300">Available</p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Active Modules Card */}
+        <motion.div
+          className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all duration-300 overflow-hidden"
+          whileHover={{ y: -2, scale: 1.02 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}>
+          <div className="flex h-full">
+            {/* Icon Column - Left Side */}
+            <div className="flex items-center justify-center bg-purple-100 dark:bg-purple-900/20 min-w-[100px] w-24 flex-shrink-0">
+              <motion.div
+                whileHover={{ rotate: 5, scale: 1.1 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 10 }}>
+                <Activity className="w-12 h-12 text-purple-600 dark:text-purple-400" />
+              </motion.div>
+            </div>
+            
+            {/* Content Column - Right Side */}
+            <div className="flex-1 flex flex-col justify-center p-6 min-w-0">
+              <motion.h3
+                className="text-4xl font-bold text-gray-900 dark:text-white mb-1"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.4 }}>
+                {modules.filter(m => (m.submissions && m.submissions > 0) || m.lastUsed).length}
+              </motion.h3>
+              <p className="text-base font-medium text-gray-600 dark:text-gray-300">Active</p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Payment Card */}
+        <motion.div
+          className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all duration-300 overflow-hidden"
+          whileHover={{ y: -2, scale: 1.02 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}>
+          <div className="flex h-full">
+            {/* Icon Column - Left Side */}
+            <div className="flex items-center justify-center bg-yellow-100 dark:bg-yellow-900/20 min-w-[100px] w-24 flex-shrink-0">
+              <motion.div
+                whileHover={{ rotate: 5, scale: 1.1 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 10 }}>
+                <CreditCard className="w-12 h-12 text-yellow-600 dark:text-yellow-400" />
+              </motion.div>
+            </div>
+            
+            {/* Content Column - Right Side */}
+            <div className="flex-1 flex flex-col justify-center p-6 min-w-0">
+              <motion.h3
+                className="text-4xl font-bold text-gray-900 dark:text-white mb-1"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.45 }}>
+                24
+              </motion.h3>
+              <p className="text-base font-medium text-gray-600 dark:text-gray-300">Payment</p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Administration Card */}
+        <motion.div
+          className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all duration-300 overflow-hidden"
+          whileHover={{ y: -2, scale: 1.02 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}>
+          <div className="flex h-full">
+            {/* Icon Column - Left Side */}
+            <div className="flex items-center justify-center bg-indigo-100 dark:bg-indigo-900/20 min-w-[100px] w-24 flex-shrink-0">
+              <motion.div
+                whileHover={{ rotate: 5, scale: 1.1 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 10 }}>
+                <Shield className="w-12 h-12 text-indigo-600 dark:text-indigo-400" />
+              </motion.div>
+            </div>
+            
+            {/* Content Column - Right Side */}
+            <div className="flex-1 flex flex-col justify-center p-6 min-w-0">
+              <motion.h3
+                className="text-4xl font-bold text-gray-900 dark:text-white mb-1"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.5 }}>
+                8
+              </motion.h3>
+              <p className="text-base font-medium text-gray-600 dark:text-gray-300">Administration</p>
+            </div>
+          </div>
+        </motion.div>
+      </motion.div>
+
+      {/* Module Grid */}
+      {filteredModules.length === 0 ? (
+        <motion.div
+          className="text-center py-12"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.4 }}>
+          <FileText className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+            No modules found
+          </h3>
+          <p className="text-gray-500 dark:text-gray-400 mb-4">
+            {searchTerm || selectedCategory !== "All"
+              ? "Try adjusting your search or filter criteria"
+              : "No modules available at the moment"}
+          </p>
+          {(searchTerm || selectedCategory !== "All") && (
+            <button
+              onClick={() => {
+                setSearchTerm("");
+                setSelectedCategory("All");
+              }}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+              Clear Filters
+            </button>
+          )}
+        </motion.div>
+      ) : (
+        <motion.div
+          className={`grid gap-3 mobile:gap-3 md:gap-4 ${
+            isMobile
+              ? "grid-cols-1"
+              : "grid-cols-1 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7"
+          }`}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}>
+          {filteredModules.map((module, index) => (
+            <ModuleCardCompact
+              key={module.id}
+              {...module}
+              onClick={() => handleModuleClick(module)}
+              index={index}
+              variant="compact"
+            />
+          ))}
+        </motion.div>
+      )}
+
+      {/* Form Drawer */}
+      <FormDrawer
+        isOpen={drawerOpen}
+        onClose={handleCloseDrawer}
+        form={selectedForm}
+        loading={formLoading}
+        formValues={formValues}
+        onFormChange={handleFormChange}
+        onSubmit={handleFormSubmit}
+        isSubmitting={isSubmitting}
+      />
+    </div>
+  );
+}
+

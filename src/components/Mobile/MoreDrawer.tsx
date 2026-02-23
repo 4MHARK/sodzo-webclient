@@ -5,6 +5,7 @@ import {
   Mail,
   Cloud,
   ShieldCheck,
+  ShoppingBag,
   X,
   ChevronRight,
 } from "lucide-react";
@@ -37,6 +38,7 @@ export default function MoreDrawer({ isOpen, onClose }: MoreDrawerProps) {
     { name: "Network", href: "/network", icon: Network },
     { name: "Email Center", href: "/emails", icon: Mail },
     { name: "Cloud Storage", href: "/storage", icon: Cloud },
+    { name: "Store", href: "/store", icon: ShoppingBag },
     { name: "Admin", href: "/admin", icon: ShieldCheck, ownerOnly: true },
   ];
 

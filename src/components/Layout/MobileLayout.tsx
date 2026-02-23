@@ -5,6 +5,7 @@ import MobileHeader from "./MobileHeader";
 import BottomNavigation from "./BottomNavigation";
 import Sidebar from "./Sidebar";
 import MoreDrawer from "../Mobile/MoreDrawer";
+import { ChatBubble } from "../Chat";
 
 export default function MobileLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -40,6 +41,9 @@ export default function MobileLayout() {
 
       {/* Bottom Navigation */}
       <BottomNavigation onMoreClick={() => setMoreDrawerOpen(true)} />
+
+      {/* Chat Bubble - Fixed bottom right (above bottom nav) */}
+      <ChatBubble variant="white" />
     </div>
   );
 }
