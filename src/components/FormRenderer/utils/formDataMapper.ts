@@ -62,6 +62,7 @@ export function mapApiFormToConfiguration(apiForm: any): FormConfiguration {
           pattern: element.properties?.pattern,
           helpText: element.properties?.helpText,
           description: element.properties?.description,
+          colSpan: element.properties?.colSpan,
         },
         section: element.section,
         validation: element.validation,
@@ -75,11 +76,14 @@ export function mapApiFormToConfiguration(apiForm: any): FormConfiguration {
   return {
     id: apiForm.projectId || apiForm.id || '',
     projectId: apiForm.projectId || apiForm.id || '',
+    style: apiForm.style || 'default',
+    wizardMode: Boolean(apiForm.wizardMode),
+    columnSpans: apiForm.columnSpans || {},
     configuration: {
       projectName: apiForm.configuration?.projectName || apiForm.name || 'Untitled Form',
       description: apiForm.configuration?.description || apiForm.description,
       category: apiForm.configuration?.category || apiForm.category,
-      defaultMode: apiForm.configuration?.defaultMode || 'chat',
+      defaultMode: apiForm.configuration?.defaultMode || 'standard',
     },
     elements,
     validation: apiForm.validation,
@@ -91,13 +95,19 @@ export function mapApiFormToConfiguration(apiForm: any): FormConfiguration {
  * Map API field type to our FieldType
  */
 function mapFieldType(apiType: string): FieldType {
+  const normalized = String(apiType || '').toLowerCase();
   const typeMap: Record<string, FieldType> = {
     text: 'text',
     email: 'email',
+    password: 'password',
+    url: 'url',
     tel: 'tel',
     phone: 'tel',
     number: 'number',
     date: 'date',
+    time: 'time',
+    datetime: 'datetime-local',
+    'datetime-local': 'datetime-local',
     textarea: 'textarea',
     select: 'select',
     dropdown: 'select',
@@ -107,8 +117,13 @@ function mapFieldType(apiType: string): FieldType {
     radio: 'radio',
     file: 'file',
     upload: 'file',
+    rating: 'rating',
+    slider: 'slider',
+    range: 'slider',
+    switch: 'switch',
+    toggle: 'switch',
   };
 
-  return typeMap[apiType.toLowerCase()] || 'text';
+  return typeMap[normalized] || 'text';
 }
 

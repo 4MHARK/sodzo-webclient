@@ -11,6 +11,7 @@ import { Toaster } from "react-hot-toast";
 import Dashboard from "./pages/Dashboard";
 import Storage from "./pages/Storage";
 import FormModulesDashboard from "./pages/FormModulesDashboard";
+import ModuleSubmissions from "./pages/ModuleSubmissions";
 import FormRenderer from "./pages/FormRenderer";
 import Settings from "./pages/Settings";
 import Emails from "./pages/Emails";
@@ -110,6 +111,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <FormModulesDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="projects/:projectId/submissions"
+              element={
+                <ProtectedRoute>
+                  <ModuleSubmissions />
                 </ProtectedRoute>
               }
             />

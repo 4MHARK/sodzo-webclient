@@ -7,6 +7,7 @@ import { mapApiFormToConfiguration } from "../FormRenderer/utils/formDataMapper"
 interface FormDrawerProps {
   isOpen: boolean;
   onClose: () => void;
+  onViewSubmissions?: () => void;
   form: any | null;
   loading?: boolean;
   formValues?: Record<string, any>;
@@ -18,6 +19,7 @@ interface FormDrawerProps {
 export default function FormDrawer({
   isOpen,
   onClose,
+  onViewSubmissions,
   form,
   loading = false,
   formValues = {},
@@ -57,9 +59,19 @@ export default function FormDrawer({
 
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                  {form?.configuration?.projectName || "Form"}
-                </h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                    {form?.configuration?.projectName || "Form"}
+                  </h2>
+                  {onViewSubmissions && (
+                    <button
+                      onClick={onViewSubmissions}
+                      className="rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+                    >
+                      Submissions
+                    </button>
+                  )}
+                </div>
                 <button
                   onClick={onClose}
                   className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors touch-target"
@@ -130,9 +142,19 @@ export default function FormDrawer({
 
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {form?.configuration?.projectName || "Form"}
-                </h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    {form?.configuration?.projectName || "Form"}
+                  </h2>
+                  {onViewSubmissions && (
+                    <button
+                      onClick={onViewSubmissions}
+                      className="rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+                    >
+                      Submissions
+                    </button>
+                  )}
+                </div>
                 <button
                   onClick={onClose}
                   className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"

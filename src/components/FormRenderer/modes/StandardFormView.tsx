@@ -3,7 +3,7 @@
  * Renders complete form with all fields visible at once
  */
 
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { FormElement } from '../types';
 import UnifiedFieldRenderer from '../fields/UnifiedFieldRenderer';
 import { useFormContext } from '../FormContext';
@@ -41,8 +41,27 @@ function getSectionColor(sectionName: string): string {
   return colors[sectionName] || 'text-gray-600 dark:text-gray-400';
 }
 
+function getColSpanClass(span: number): string {
+  const map: Record<number, string> = {
+    1: 'md:col-span-1',
+    2: 'md:col-span-2',
+    3: 'md:col-span-3',
+    4: 'md:col-span-4',
+    5: 'md:col-span-5',
+    6: 'md:col-span-6',
+    7: 'md:col-span-7',
+    8: 'md:col-span-8',
+    9: 'md:col-span-9',
+    10: 'md:col-span-10',
+    11: 'md:col-span-11',
+    12: 'md:col-span-12',
+  };
+  return map[span] || 'md:col-span-12';
+}
+
 export default function StandardFormView({ onScrollToError }: StandardFormViewProps) {
   const { state, actions } = useFormContext();
+  const [wizardSectionIndex, setWizardSectionIndex] = useState(0);
 
   if (!state.formData) {
     return (
@@ -91,11 +110,22 @@ export default function StandardFormView({ onScrollToError }: StandardFormViewPr
     actions.validateField(fieldId);
   };
 
+  const sections = useMemo(
+    () => Object.entries(fieldsBySection).filter(([, sectionFields]) => sectionFields.length > 0),
+    [fieldsBySection]
+  );
+  const isWizardMode = Boolean(state.formData?.wizardMode);
+  const activeWizardIndex = Math.min(
+    wizardSectionIndex,
+    Math.max(sections.length - 1, 0)
+  );
+  const visibleSections = isWizardMode
+    ? [sections[activeWizardIndex]].filter(Boolean)
+    : sections;
+
   return (
     <div className="space-y-6">
-      {Object.entries(fieldsBySection).map(([sectionName, sectionFields]) => {
-        if (sectionFields.length === 0) return null;
-
+      {visibleSections.map(([sectionName, sectionFields]) => {
         const SectionIcon = sectionIcons[sectionName] || FileText;
         const sectionColor = getSectionColor(sectionName);
 
@@ -103,21 +133,36 @@ export default function StandardFormView({ onScrollToError }: StandardFormViewPr
           <div
             key={sectionName}
             className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-            <div className="flex items-center mb-6">
-              <SectionIcon className={`w-5 h-5 ${sectionColor} mr-2`} />
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                {sectionName}
-              </h3>
+            <div className="mb-6 flex items-center justify-between gap-3">
+              <div className="flex items-center">
+                <SectionIcon className={`mr-2 h-5 w-5 ${sectionColor}`} />
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {sectionName}
+                </h3>
+              </div>
+              {isWizardMode && sections.length > 1 ? (
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                  Step {activeWizardIndex + 1} of {sections.length}
+                </span>
+              ) : null}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
               {sectionFields.map((field) => {
                 const value = state.formValues[field.id] ?? field.properties.defaultValue ?? '';
                 const error = state.validationErrors[field.id];
                 const touched = state.fieldTouched[field.id] || false;
+                const configuredSpan =
+                  Number(state.formData?.columnSpans?.[field.id]) ||
+                  Number(field.properties?.colSpan) ||
+                  12;
+                const normalizedSpan = Math.max(1, Math.min(12, configuredSpan));
 
                 return (
-                  <div key={field.id} id={`field-${field.id}`}>
+                  <div
+                    key={field.id}
+                    id={`field-${field.id}`}
+                    className={getColSpanClass(normalizedSpan)}>
                     <UnifiedFieldRenderer
                       field={field}
                       value={value}
@@ -129,6 +174,29 @@ export default function StandardFormView({ onScrollToError }: StandardFormViewPr
                 );
               })}
             </div>
+
+            {isWizardMode && sections.length > 1 ? (
+              <div className="mt-6 flex items-center justify-between border-t border-gray-200 pt-4 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => setWizardSectionIndex((prev) => Math.max(0, prev - 1))}
+                  disabled={activeWizardIndex === 0}
+                  className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-600 dark:text-gray-200">
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setWizardSectionIndex((prev) =>
+                      Math.min(sections.length - 1, prev + 1)
+                    )
+                  }
+                  disabled={activeWizardIndex >= sections.length - 1}
+                  className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
+                  Continue
+                </button>
+              </div>
+            ) : null}
           </div>
         );
       })}

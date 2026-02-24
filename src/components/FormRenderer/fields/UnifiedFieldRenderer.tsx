@@ -51,6 +51,12 @@ export default function UnifiedFieldRenderer({
     
     case 'email':
       return <EmailField {...commonProps} />;
+
+    case 'password':
+      return <TextField {...commonProps} type="password" />;
+
+    case 'url':
+      return <TextField {...commonProps} type="url" />;
     
     case 'tel':
       return <TextField {...commonProps} type="tel" />;
@@ -60,6 +66,12 @@ export default function UnifiedFieldRenderer({
     
     case 'date':
       return <DateField {...commonProps} />;
+
+    case 'time':
+      return <TextField {...commonProps} type="time" />;
+
+    case 'datetime-local':
+      return <TextField {...commonProps} type="datetime-local" />;
     
     case 'textarea':
       return <TextareaField {...commonProps} />;
@@ -78,6 +90,15 @@ export default function UnifiedFieldRenderer({
     
     case 'file':
       return <FileField {...commonProps} />;
+
+    case 'switch':
+      return <CheckboxField {...commonProps} />;
+
+    case 'rating':
+      return <NumberField {...commonProps} />;
+
+    case 'slider':
+      return <NumberField {...commonProps} />;
     
     default:
       return <TextField {...commonProps} />;

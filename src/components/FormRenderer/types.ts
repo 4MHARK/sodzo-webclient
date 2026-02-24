@@ -6,15 +6,22 @@ export type FormMode = 'standard' | 'chat';
 export type FieldType =
   | 'text'
   | 'email'
+  | 'password'
+  | 'url'
   | 'tel'
   | 'number'
   | 'date'
+  | 'time'
+  | 'datetime-local'
   | 'textarea'
   | 'select'
   | 'multiselect'
   | 'checkbox'
   | 'radio'
   | 'file'
+  | 'rating'
+  | 'slider'
+  | 'switch'
   | 'header';
 
 export type ConditionalOperator = 'equals' | 'notEquals' | 'contains' | 'greaterThan' | 'lessThan';
@@ -26,6 +33,9 @@ export type ConfirmationState = 'idle' | 'confirming' | 'submitting' | 'success'
 export interface FormConfiguration {
   id: string;
   projectId: string;
+  style?: string;
+  wizardMode?: boolean;
+  columnSpans?: Record<string, number>;
   configuration: {
     projectName: string;
     description?: string;
@@ -66,6 +76,7 @@ export interface FieldProperties {
   pattern?: string; // Regex pattern
   helpText?: string;
   description?: string;
+  colSpan?: number;
 }
 
 /**

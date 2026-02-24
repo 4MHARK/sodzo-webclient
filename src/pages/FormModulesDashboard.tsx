@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Search, Filter, Loader2, FileText, CheckCircle2, Activity, CreditCard, Shield } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useDeviceDetection } from "../hooks/useDeviceDetection";
 import ModuleCard from "../components/FormModules/ModuleCard";
@@ -24,6 +25,7 @@ interface ProjectForm {
 export default function FormModulesDashboard() {
   const { api } = useAuth();
   const { isMobile } = useDeviceDetection();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [modules, setModules] = useState<FormModuleData[]>([]);
   const [filteredModules, setFilteredModules] = useState<FormModuleData[]>([]);
@@ -124,11 +126,84 @@ export default function FormModulesDashboard() {
     
     try {
       setIsSubmitting(true);
-      
-      // Submit form data to API
-      // TODO: Update endpoint when backend is ready
-      await api.post(`/project-forms/project/${selectedModule.id}/submit`, {
-        formData: values,
+
+      const resolveModuleFolderId = async () => {
+        try {
+          const response = await api.get(
+            `/project-forms/project/${selectedModule.id}/storage-folder`
+          );
+          return response?.data?._id || null;
+        } catch (_error) {
+          return null;
+        }
+      };
+
+      const moduleFolderId = await resolveModuleFolderId();
+
+      const uploadFileForField = async (fieldId: string, file: File) => {
+        const body = new FormData();
+        body.append("file", file);
+        if (moduleFolderId) {
+          body.append("folderId", moduleFolderId);
+        }
+
+        try {
+          const response = await api.post("/storage/upload", body, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+
+          const uploaded = response.data;
+          return {
+            fieldId,
+            fileId: uploaded?.fileId || uploaded?._id || null,
+            originalName: uploaded?.originalName || file.name,
+            mimeType: uploaded?.mimeType || file.type,
+            size: uploaded?.fileSize || file.size,
+            url: uploaded?.storageUrl || null,
+            uploadedAt: new Date().toISOString(),
+          };
+        } catch (_uploadError) {
+          // Fallback: keep submission valid even when storage permission/upload fails.
+          return {
+            fieldId,
+            originalName: file.name,
+            mimeType: file.type,
+            size: file.size,
+            uploadedAt: new Date().toISOString(),
+            uploadState: "pending-storage",
+          };
+        }
+      };
+
+      const normalizeSubmissionValues = async (raw: Record<string, any>) => {
+        const nextValues: Record<string, any> = { ...raw };
+
+        for (const [fieldId, value] of Object.entries(raw)) {
+          if (value instanceof File) {
+            nextValues[fieldId] = await uploadFileForField(fieldId, value);
+            continue;
+          }
+
+          if (Array.isArray(value) && value.length > 0 && value[0] instanceof File) {
+            nextValues[fieldId] = await Promise.all(
+              value.map((file) => uploadFileForField(fieldId, file))
+            );
+          }
+        }
+
+        return nextValues;
+      };
+
+      const normalizedValues = await normalizeSubmissionValues(values);
+
+      await api.post("/form-submissions", {
+        projectId: selectedModule.id,
+        submissionData: normalizedValues,
+        metadata: {
+          source: "sabyWeb",
+          timestamp: Date.now(),
+          moduleFolderId,
+        },
       });
       
       toast.success("Module submitted successfully!");
@@ -148,6 +223,12 @@ export default function FormModulesDashboard() {
     setDrawerOpen(false);
     setSelectedForm(null);
     setFormValues({});
+  };
+
+  const handleViewSubmissions = () => {
+    if (!selectedModule) return;
+    setDrawerOpen(false);
+    navigate(`/projects/${selectedModule.id}/submissions`);
   };
 
   if (loading) {
@@ -442,6 +523,7 @@ export default function FormModulesDashboard() {
         onFormChange={handleFormChange}
         onSubmit={handleFormSubmit}
         isSubmitting={isSubmitting}
+        onViewSubmissions={handleViewSubmissions}
       />
     </div>
   );
