@@ -2,8 +2,9 @@
  * Select (Dropdown) Field Component
  */
 
-import React from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { FormElement } from '../types';
+import { useFormContext } from '../FormContext';
 
 interface SelectFieldProps {
   field: FormElement;
@@ -21,7 +22,24 @@ export default function SelectField({
   disabled = false,
 }: SelectFieldProps) {
   const { properties } = field;
-  const options = properties.options || [];
+  const { state } = useFormContext();
+  const parentFieldId = properties.parentDropdown;
+  const optionsMap = properties.optionsMap;
+  const parentValue = parentFieldId ? state.formValues[parentFieldId] : undefined;
+
+  const options = useMemo(() => {
+    if (parentFieldId && optionsMap) {
+      return optionsMap[String(parentValue ?? '')] || [];
+    }
+    return properties.options || [];
+  }, [optionsMap, parentFieldId, parentValue, properties.options]);
+
+  useEffect(() => {
+    if (!value || options.length === 0) return;
+    if (!options.includes(String(value))) {
+      onChange('');
+    }
+  }, [onChange, options, value]);
 
   return (
     <div className="space-y-2">

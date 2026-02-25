@@ -21,7 +21,9 @@ export function evaluateCondition(
       return fieldValue !== rule.value;
     
     case 'contains':
-      return String(fieldValue).includes(String(rule.value));
+      return Array.isArray(fieldValue)
+        ? fieldValue.includes(rule.value)
+        : String(fieldValue).includes(String(rule.value));
     
     case 'greaterThan':
       return Number(fieldValue) > Number(rule.value);
@@ -72,8 +74,8 @@ export function getVisibleFields(
   formValues: Record<string, any>
 ): FormElement[] {
   return elements.filter(element => {
-    // Always show headers
-    if (element.type === 'header') return true;
+    // Always show content blocks
+    if (element.type === 'header' || element.type === 'paragraph') return true;
     
     return shouldShowField(element, formValues);
   });
@@ -88,7 +90,7 @@ export function getFieldsToShow(
   formValues: Record<string, any>
 ): FormElement[] {
   return allElements.filter(element => {
-    if (element.type === 'header') return true;
+    if (element.type === 'header' || element.type === 'paragraph') return true;
     if (!element.conditional) return true;
 
     // Check if this field's visibility depends on the changed field

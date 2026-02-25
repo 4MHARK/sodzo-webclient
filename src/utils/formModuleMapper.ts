@@ -101,8 +101,17 @@ export function mapFormToModule(form: any): FormModuleData {
   }) || [];
   const fields = actualFields.length;
   
-  // Extract category if available
-  const category = form.configuration?.category || form.category;
+  // configuration.tags is the canonical category store in the MongoDB model
+  // (described as "Categories like CRM, Sales, etc.").
+  // Fall back to a bare `category` field if ever present.
+  const tags: string[] = Array.isArray(form.configuration?.tags)
+    ? form.configuration.tags
+    : [];
+  const category: string | undefined =
+    form.configuration?.category ||
+    form.category ||
+    tags[0] ||
+    undefined;
   
   // Extract submission count if available
   const submissions = form.submissions?.length || form.submissionCount;

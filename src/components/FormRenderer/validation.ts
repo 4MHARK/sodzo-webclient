@@ -14,6 +14,11 @@ export function validateField(
 ): string | null {
   const { validation, properties } = field;
 
+  // Content blocks are not input fields
+  if (field.type === 'header' || field.type === 'paragraph') {
+    return null;
+  }
+
   // Required validation
   if (properties.required) {
     if (value === null || value === undefined || value === '') {
@@ -73,8 +78,11 @@ export function validateField(
   }
 
   // Number range validation
-  if (field.type === 'number') {
-    const numValue = Number(value);
+  if (field.type === 'number' || field.type === 'slider' || field.type === 'rating') {
+    const numValue =
+      typeof value === 'number'
+        ? value
+        : Number(String(value).replace(/[^\d.-]/g, ''));
     if (isNaN(numValue)) {
       return `${properties.label} must be a valid number`;
     }
@@ -123,8 +131,8 @@ export function validateForm(
   const errors: Record<string, string> = {};
 
   formData.elements.forEach((element) => {
-    // Skip headers
-    if (element.type === 'header') return;
+    // Skip non-input content blocks
+    if (element.type === 'header' || element.type === 'paragraph') return;
 
     const value = formValues[element.id];
     const error = validateField(element, value, formValues);

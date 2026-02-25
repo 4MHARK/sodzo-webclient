@@ -76,19 +76,9 @@ export default function StandardFormView({ onScrollToError }: StandardFormViewPr
   let currentSection = 'Default';
 
   state.formData.elements.forEach((element) => {
-    // Skip header, title, h1-h6 elements - these should not be rendered as form fields
-    const isHeader = element.type === 'header' || 
-                    element.type === 'title' ||
-                    element.type === 'h1' ||
-                    element.type === 'h2' ||
-                    element.type === 'h3' ||
-                    element.type === 'h4' ||
-                    element.type === 'h5' ||
-                    element.type === 'h6';
-    
-    if (isHeader) {
-      // Headers are not form fields - skip them entirely
-      return;
+    const isHeader = element.type === 'header';
+    if (isHeader && !element.section && element.properties?.label) {
+      currentSection = String(element.properties.label);
     }
 
     // Regular field - check conditional logic and add to appropriate section
@@ -157,19 +147,69 @@ export default function StandardFormView({ onScrollToError }: StandardFormViewPr
                   Number(field.properties?.colSpan) ||
                   12;
                 const normalizedSpan = Math.max(1, Math.min(12, configuredSpan));
+                const isContentBlock =
+                  field.type === 'header' || field.type === 'paragraph';
+                const headerLevel =
+                  field.properties.headerLevel ||
+                  (field.type === 'header' ? 'h3' : 'p');
+                const alignment =
+                  field.type === 'header'
+                    ? field.properties.headerAlignment || 'left'
+                    : field.properties.paragraphAlignment || 'left';
+                const alignClass =
+                  alignment === 'center'
+                    ? 'text-center'
+                    : alignment === 'right'
+                      ? 'text-right'
+                      : alignment === 'justify'
+                        ? 'text-justify'
+                        : 'text-left';
+                const headerClass =
+                  headerLevel === 'h1'
+                    ? 'text-3xl'
+                    : headerLevel === 'h2'
+                      ? 'text-2xl'
+                      : headerLevel === 'h4'
+                        ? 'text-lg'
+                        : headerLevel === 'h5'
+                          ? 'text-base'
+                          : headerLevel === 'h6'
+                            ? 'text-sm'
+                            : 'text-xl';
+                const paragraphText =
+                  field.properties.paragraphText ||
+                  field.properties.label ||
+                  field.properties.helpText ||
+                  '';
 
                 return (
                   <div
                     key={field.id}
                     id={`field-${field.id}`}
-                    className={getColSpanClass(normalizedSpan)}>
-                    <UnifiedFieldRenderer
-                      field={field}
-                      value={value}
-                      onChange={(val) => handleFieldChange(field.id, val)}
-                      error={error}
-                      touched={touched}
-                    />
+                    className={
+                      isContentBlock ? 'md:col-span-12' : getColSpanClass(normalizedSpan)
+                    }>
+                    {field.type === 'header' ? (
+                      React.createElement(
+                        headerLevel,
+                        {
+                          className: `${headerClass} ${alignClass} font-semibold text-gray-900 dark:text-white`,
+                        },
+                        field.properties.label
+                      )
+                    ) : field.type === 'paragraph' ? (
+                      <p className={`text-sm text-gray-600 dark:text-gray-300 ${alignClass}`}>
+                        {paragraphText}
+                      </p>
+                    ) : (
+                      <UnifiedFieldRenderer
+                        field={field}
+                        value={value}
+                        onChange={(val) => handleFieldChange(field.id, val)}
+                        error={error}
+                        touched={touched}
+                      />
+                    )}
                   </div>
                 );
               })}

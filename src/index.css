@@ -14,6 +14,17 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+
+  /* Ensure native date/time/datetime pickers are never hidden by CSS resets */
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"],
+  input[type="month"],
+  input[type="week"] {
+    appearance: auto !important;
+    -webkit-appearance: auto !important;
+    cursor: pointer;
+  }
 }
 
 @layer components {

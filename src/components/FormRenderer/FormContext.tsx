@@ -233,7 +233,7 @@ export function FormProvider({ children, formData, onSubmit, initialMode }: Form
     // Mark all fields as touched
     const touched: Record<string, boolean> = {};
     state.formData.elements.forEach(el => {
-      if (el.type !== 'header') {
+      if (el.type !== 'header' && el.type !== 'paragraph') {
         touched[el.id] = true;
       }
     });

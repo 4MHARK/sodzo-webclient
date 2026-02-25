@@ -4,9 +4,11 @@ import { Search, Filter, Loader2, FileText, CheckCircle2, Activity, CreditCard, 
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useDeviceDetection } from "../hooks/useDeviceDetection";
+import { useUserNode } from "../hooks/useUserNode";
 import ModuleCard from "../components/FormModules/ModuleCard";
 import ModuleCardCompact from "../components/FormModules/ModuleCardCompact";
 import FormDrawer from "../components/FormModules/FormDrawer";
+import { currentMonthValue } from "../components/FormModules/MonthYearSelector";
 import { mapFormsToModules, FormModuleData } from "../utils/formModuleMapper";
 import toast from "react-hot-toast";
 
@@ -23,7 +25,9 @@ interface ProjectForm {
 }
 
 export default function FormModulesDashboard() {
-  const { api } = useAuth();
+  const { api, user } = useAuth();
+  // Fetch once at mount — result cached across re-renders
+  const { nodeId: userNodeId, node: userNode, loading: nodeLoading } = useUserNode();
   const { isMobile } = useDeviceDetection();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -37,6 +41,17 @@ export default function FormModulesDashboard() {
   const [formLoading, setFormLoading] = useState(false);
   const [formValues, setFormValues] = useState<Record<string, any>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Reporting month for PERM-enabled forms — defaults to the current month
+  const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthValue());
+  // Compliance-approved months from the backend; undefined = not yet fetched
+  const [allowedMonths, setAllowedMonths] = useState<string[] | undefined>(undefined);
+  const [lockedMonths, setLockedMonths] = useState<string[]>([]);
+
+  // Per-date event schedule for the selected month (daily / weekly modes)
+  const [allowedEventDates, setAllowedEventDates] = useState<any[] | undefined>(undefined);
+  const [selectedEventDate, setSelectedEventDate] = useState<string>("");
+  const [eventDatesLoading, setEventDatesLoading] = useState(false);
+  const [trackingMode, setTrackingMode] = useState<string>("none");
 
   // Fetch forms from API
   useEffect(() => {
@@ -92,6 +107,47 @@ export default function FormModulesDashboard() {
   // Get unique categories
   const categories = ["All", ...Array.from(new Set(modules.map(m => m.category).filter(Boolean)))];
 
+  // Fetch per-date schedule for the selected month (daily / weekly modes)
+  const fetchEventDates = async (
+    projectId: string,
+    nodeId: string,
+    month: string,        // "YYYY-MM"
+    mode: string
+  ) => {
+    if (mode === "none" || !mode) {
+      setAllowedEventDates(undefined);
+      setSelectedEventDate("");
+      return;
+    }
+    try {
+      setEventDatesLoading(true);
+      const res = await api.get("/submissions/allowed-dates", {
+        params: { projectId, nodeId, month },
+      });
+      const { dates = [], trackingMode: tm } = res.data;
+      setTrackingMode(tm || "none");
+      setAllowedEventDates(dates);
+      // Auto-select the first available date
+      const today = new Date().toISOString().split("T")[0];
+      const firstOpen = dates.find((d: any) => !d.isFull && d.date >= today);
+      setSelectedEventDate(firstOpen?.date ?? dates[0]?.date ?? "");
+    } catch (err) {
+      console.warn("Event dates fetch failed:", err);
+      setAllowedEventDates([]);
+    } finally {
+      setEventDatesLoading(false);
+    }
+  };
+
+  // When the user changes the reporting month, re-fetch event dates
+  const handleMonthChange = (month: string) => {
+    setSelectedMonth(month);
+    if (selectedForm && userNodeId) {
+      const mode = selectedForm?.permSettings?.trackingMode ?? "none";
+      fetchEventDates(selectedForm.projectId, userNodeId, month, mode);
+    }
+  };
+
   // Handle module click
   const handleModuleClick = async (module: FormModuleData) => {
     try {
@@ -99,10 +155,59 @@ export default function FormModulesDashboard() {
       setFormLoading(true);
       setDrawerOpen(true);
       setFormValues({});
+      setSelectedMonth(currentMonthValue()); // reset to current month for each new form
+      setAllowedMonths(undefined);           // clear until compliance fetch resolves
+      setLockedMonths([]);
+      setAllowedEventDates(undefined);
+      setSelectedEventDate("");
+      setTrackingMode("none");
 
-      // Fetch form details from API
-      const response = await api.get(`/project-forms/project/${module.id}`);
-      setSelectedForm(response.data);
+      // Fetch form details + compliance window in parallel
+      const [formResponse] = await Promise.all([
+        api.get(`/project-forms/project/${module.id}`),
+      ]);
+      const fetchedForm = formResponse.data;
+      setSelectedForm(fetchedForm);
+
+      // Only fetch compliance window for PERM forms that require a month
+      const isPermForm   = fetchedForm?.permSettings?.enabled === true;
+      const requireMonth = fetchedForm?.permSettings?.requireMonth === true;
+
+      if (isPermForm && requireMonth && userNodeId) {
+        try {
+          const compResponse = await api.get("/submissions/allowed-months", {
+            params: { projectId: module.id, nodeId: userNodeId },
+          });
+          const { allowedDates = [], lockedDates = [] } = compResponse.data;
+          // The backend now always returns a full year from event_calendar
+          // (or a generated fallback). Pass it straight to the selector — no
+          // rolling-window fallback needed in the UI anymore.
+          setAllowedMonths(allowedDates);
+          setLockedMonths(lockedDates);
+          // Auto-select the first unlocked future/current month if the
+          // currently selected month is not in the allowed list.
+          const currentMo = currentMonthValue();
+          if (allowedDates.length > 0 && !allowedDates.includes(currentMo)) {
+            // Pick the nearest future month, otherwise the first available.
+            const future = allowedDates.filter((d: string) => d >= currentMo);
+            setSelectedMonth(future.length > 0 ? future[0] : allowedDates[0]);
+          }
+          if (allowedDates.length === 0) {
+              toast.error("No submission window open for this module — all periods are locked.");
+            }
+        } catch (compErr) {
+          console.warn("Compliance window fetch failed:", compErr);
+          setAllowedMonths(undefined);
+        }
+
+        // Fetch per-date schedule for the initial selected month
+        const mode = fetchedForm?.permSettings?.trackingMode ?? "none";
+        setTrackingMode(mode);
+        if (mode !== "none") {
+          const initMonth = currentMonthValue();
+          await fetchEventDates(module.id, userNodeId, initMonth, mode);
+        }
+      }
     } catch (error: any) {
       console.error("Error loading form:", error);
       toast.error("Failed to load form");
@@ -123,7 +228,15 @@ export default function FormModulesDashboard() {
   // Handle form submission
   const handleFormSubmit = async (values: Record<string, any>) => {
     if (!selectedModule) return;
-    
+
+    // Block submissions if the user has no assigned node
+    if (!nodeLoading && !userNodeId) {
+      toast.error(
+        "You are not assigned to a node. Please contact your administrator before submitting."
+      );
+      return;
+    }
+
     try {
       setIsSubmitting(true);
 
@@ -196,15 +309,76 @@ export default function FormModulesDashboard() {
 
       const normalizedValues = await normalizeSubmissionValues(values);
 
-      await api.post("/form-submissions", {
+      // Resolve identifiers from the fetched form object and current user.
+      const tenantId =
+        (selectedForm as any)?.tenantId ||
+        (selectedForm as any)?.tenant_id ||
+        user?.tenantId ||
+        "";
+      const formId =
+        (selectedForm as any)?.formId ||
+        (selectedForm as any)?.form_id ||
+        selectedModule.id;
+      const projectName =
+        (selectedForm as any)?.configuration?.projectName ||
+        selectedModule.name ||
+        "";
+      // configuration.tags is where the model stores categories; fall back
+      // to selectedModule.category (already resolved by formModuleMapper)
+      const formTags: string[] = Array.isArray(
+        (selectedForm as any)?.configuration?.tags
+      )
+        ? (selectedForm as any).configuration.tags
+        : [];
+      const projectCategory =
+        (selectedForm as any)?.configuration?.category ||
+        formTags[0] ||
+        selectedModule.category ||
+        "";
+      const userName =
+        user?.name ||
+        [user?.firstname, user?.lastname].filter(Boolean).join(" ") ||
+        undefined;
+
+      // Resolve nodeId from the user's primary organisational node (fetched
+      // once at mount by useUserNode).  Only include nodeId/node_name in the
+      // payload when non-empty — Joi rejects empty strings.
+      const resolvedNodeId = userNodeId || undefined;
+      const resolvedNodeName = (userNode?.name || undefined);
+
+      // Determine whether the form is PERM-enabled and requires a reporting month
+      const isPermForm = (selectedForm as any)?.permSettings?.enabled === true;
+      const requiresMonth = isPermForm && (selectedForm as any)?.permSettings?.requireMonth === true;
+
+      // Build the submission body, omitting optional fields that are undefined
+      // so Joi doesn't trip on empty strings.
+      const submissionBody: Record<string, unknown> = {
+        tenantId,
         projectId: selectedModule.id,
-        submissionData: normalizedValues,
-        metadata: {
-          source: "sabyWeb",
-          timestamp: Date.now(),
+        formId,
+        payload: normalizedValues,
+        source: "web",
+        meta: {
           moduleFolderId,
+          submittedAt: new Date().toISOString(),
         },
-      });
+      };
+      if (projectName) submissionBody.project_name = projectName;
+      if (projectCategory) submissionBody.project_category = projectCategory;
+      if (resolvedNodeId) submissionBody.nodeId = resolvedNodeId;
+      if (resolvedNodeName) submissionBody.node_name = resolvedNodeName;
+      if (userName) submissionBody.user_name = userName;
+      if (user?.email) submissionBody.user_email = user.email;
+      // Attach reporting month for PERM forms
+      if (requiresMonth && selectedMonth) submissionBody.month = selectedMonth;
+      // Attach specific event date for daily/weekly tracking modes
+      if (requiresMonth && trackingMode !== "none" && selectedEventDate) {
+        submissionBody.event_date = selectedEventDate;
+        submissionBody.submission_date = selectedEventDate;
+      }
+
+      // POST to the unified /submissions endpoint (BullMQ worker → PostgreSQL)
+      await api.post("/submissions", submissionBody);
       
       toast.success("Module submitted successfully!");
       setDrawerOpen(false);
@@ -524,6 +698,15 @@ export default function FormModulesDashboard() {
         onSubmit={handleFormSubmit}
         isSubmitting={isSubmitting}
         onViewSubmissions={handleViewSubmissions}
+        selectedMonth={selectedMonth}
+        onMonthChange={handleMonthChange}
+        allowedMonths={allowedMonths}
+        lockedMonths={lockedMonths}
+        allowedDates={allowedEventDates}
+        selectedEventDate={selectedEventDate}
+        onEventDateChange={setSelectedEventDate}
+        eventDatesLoading={eventDatesLoading}
+        trackingMode={trackingMode}
       />
     </div>
   );

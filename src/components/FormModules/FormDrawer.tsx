@@ -1,8 +1,9 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Loader2, ChevronRight } from "lucide-react";
 import { useDeviceDetection } from "../../hooks/useDeviceDetection";
-import UnifiedFormRenderer from "../FormRenderer/UnifiedFormRenderer";
-import { mapApiFormToConfiguration } from "../FormRenderer/utils/formDataMapper";
+import ParityFormRenderer from "../FormRendererParity/ParityFormRenderer";
+import MonthYearSelector from "./MonthYearSelector";
+import EventDateSelector, { type AllowedDate } from "./EventDateSelector";
 
 interface FormDrawerProps {
   isOpen: boolean;
@@ -14,6 +15,33 @@ interface FormDrawerProps {
   onFormChange?: (field: string, value: any) => void;
   onSubmit?: (values: Record<string, any>) => void;
   isSubmitting?: boolean;
+  /** Current selected reporting month ("YYYY-MM"), shown when form is PERM + requireMonth */
+  selectedMonth?: string;
+  onMonthChange?: (month: string) => void;
+  /**
+   * Compliance-approved months from the backend API ("YYYY-MM").
+   * Passed straight through to MonthYearSelector:
+   *   undefined → unrestricted fallback (rolling 12 months)
+   *   []        → no window open (locked message shown)
+   *   [...] → only these are selectable
+   */
+  allowedMonths?: string[];
+  /** Explicitly locked months returned by the compliance API */
+  lockedMonths?: string[];
+  /**
+   * Per-date schedule for the selected month (daily/weekly modes only).
+   * undefined  → no date selection needed (mode = "none")
+   * []         → no scheduled dates this month
+   * [...]      → selectable event dates
+   */
+  allowedDates?: AllowedDate[];
+  /** Currently selected event date ("YYYY-MM-DD") */
+  selectedEventDate?: string;
+  onEventDateChange?: (date: string) => void;
+  /** True while the allowed-dates API fetch is in flight */
+  eventDatesLoading?: boolean;
+  /** "daily" | "weekly" | "none" — from the calendar */
+  trackingMode?: string;
 }
 
 export default function FormDrawer({
@@ -26,8 +54,47 @@ export default function FormDrawer({
   onFormChange,
   onSubmit,
   isSubmitting = false,
+  selectedMonth,
+  onMonthChange,
+  allowedMonths,
+  lockedMonths = [],
+  allowedDates,
+  selectedEventDate = "",
+  onEventDateChange,
+  eventDatesLoading = false,
+  trackingMode = "none",
 }: FormDrawerProps) {
   const { isMobile } = useDeviceDetection();
+
+  const requiresMonth =
+    form?.permSettings?.enabled && form?.permSettings?.requireMonth;
+
+  // Show event-date picker when trackingMode is daily or weekly
+  const requiresEventDate = requiresMonth && (trackingMode === "daily" || trackingMode === "weekly");
+
+  const selectors = requiresMonth && selectedMonth && onMonthChange ? (
+    <div className="px-6 pt-4 pb-3 border-b border-blue-100 dark:border-blue-900/40 bg-blue-50/60 dark:bg-blue-950/20 space-y-4">
+      {/* Step 1 — Month */}
+      <MonthYearSelector
+        value={selectedMonth}
+        onChange={onMonthChange}
+        disabled={isSubmitting}
+        allowedDates={allowedMonths}
+        lockedDates={lockedMonths}
+      />
+
+      {/* Step 2 — Specific date (daily / weekly modes only) */}
+      {requiresEventDate && (
+        <EventDateSelector
+          dates={allowedDates ?? []}
+          value={selectedEventDate}
+          onChange={onEventDateChange ?? (() => {})}
+          trackingMode={trackingMode as "daily" | "weekly"}
+          loading={eventDatesLoading}
+        />
+      )}
+    </div>
+  ) : null;
 
   if (isMobile) {
     // Mobile: Bottom Sheet
@@ -80,6 +147,9 @@ export default function FormDrawer({
                 </button>
               </div>
 
+              {/* Month + Event-date selectors — only when PERM + requireMonth */}
+              {selectors}
+
               {/* Content */}
               <div className="flex-1 overflow-y-auto px-6 py-4">
                 {loading ? (
@@ -87,12 +157,7 @@ export default function FormDrawer({
                     <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
                   </div>
                 ) : form ? (
-                  <UnifiedFormRenderer
-                    formData={mapApiFormToConfiguration(form)}
-                    onSubmit={onSubmit}
-                    loading={loading}
-                    onCancel={onClose}
-                  />
+                  <ParityFormRenderer form={form} onSubmit={onSubmit} />
                 ) : (
                   <div className="text-center py-20 text-gray-500 dark:text-gray-400">
                     No form selected
@@ -100,7 +165,7 @@ export default function FormDrawer({
                 )}
               </div>
 
-              {/* Footer - Submit button is now handled by UnifiedFormRenderer */}
+              {/* Footer - Submit button is now handled by ParityFormRenderer */}
             </motion.div>
           </>
         )}
@@ -163,6 +228,9 @@ export default function FormDrawer({
                 </button>
               </div>
 
+              {/* Month + Event-date selectors — only when PERM + requireMonth */}
+              {selectors}
+
               {/* Content */}
               <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
                 {loading ? (
@@ -170,12 +238,7 @@ export default function FormDrawer({
                     <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
                   </div>
                 ) : form ? (
-                  <UnifiedFormRenderer
-                    formData={mapApiFormToConfiguration(form)}
-                    onSubmit={onSubmit}
-                    loading={loading}
-                    onCancel={onClose}
-                  />
+                  <ParityFormRenderer form={form} onSubmit={onSubmit} />
                 ) : (
                   <div className="text-center py-20 text-gray-500 dark:text-gray-400">
                     No form selected
@@ -183,7 +246,7 @@ export default function FormDrawer({
                 )}
               </div>
 
-              {/* Footer is now handled by UnifiedFormRenderer */}
+              {/* Footer is now handled by ParityFormRenderer */}
             </div>
           </motion.div>
         </>

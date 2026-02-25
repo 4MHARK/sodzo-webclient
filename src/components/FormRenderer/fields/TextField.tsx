@@ -11,7 +11,7 @@ interface TextFieldProps {
   onChange: (value: any) => void;
   error?: string | null;
   disabled?: boolean;
-  type?: 'text' | 'tel';
+  type?: 'text' | 'tel' | 'password' | 'url' | 'time' | 'datetime-local';
 }
 
 export default function TextField({

@@ -33,7 +33,7 @@ export default function UnifiedFieldRenderer({
   touched = false,
 }: UnifiedFieldRendererProps) {
   // Don't render headers (handled separately)
-  if (field.type === 'header') {
+  if (field.type === 'header' || field.type === 'paragraph') {
     return null;
   }
 

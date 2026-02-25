@@ -22,7 +22,8 @@ export type FieldType =
   | 'rating'
   | 'slider'
   | 'switch'
-  | 'header';
+  | 'header'
+  | 'paragraph';
 
 export type ConditionalOperator = 'equals' | 'notEquals' | 'contains' | 'greaterThan' | 'lessThan';
 export type ConfirmationState = 'idle' | 'confirming' | 'submitting' | 'success' | 'error';
@@ -77,6 +78,24 @@ export interface FieldProperties {
   helpText?: string;
   description?: string;
   colSpan?: number;
+  // Advanced frontend parity properties
+  numberType?: 'basic' | 'currency' | 'phone' | 'percentage' | 'calculated';
+  formula?: string;
+  readOnlyCalculated?: boolean;
+  currency?: string;
+  currencyDecimalPlaces?: number;
+  currencyPosition?: 'before' | 'after';
+  showCountrySelector?: boolean;
+  defaultCountry?: string;
+  internationalFormat?: boolean;
+  parentDropdown?: string;
+  optionsMap?: Record<string, string[]>;
+  ratingType?: 'star' | 'emoji';
+  maxRating?: number;
+  headerLevel?: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
+  headerAlignment?: 'left' | 'center' | 'right';
+  paragraphText?: string;
+  paragraphAlignment?: 'left' | 'center' | 'right' | 'justify';
 }
 
 /**
