@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 import FormPreview from "./LocalFormPreview";
@@ -10,6 +10,9 @@ interface ParityFormRendererProps {
   onSubmit?: (values: Record<string, any>) => Promise<void> | void;
   disableSubmit?: boolean;
   disableReason?: string;
+  mode?: "create" | "edit" | "view";
+  initialValues?: Record<string, any>;
+  submitLabel?: string;
 }
 
 const formStyles = {
@@ -81,9 +84,19 @@ export default function ParityFormRenderer({
   onSubmit,
   disableSubmit = false,
   disableReason,
+  mode = "create",
+  initialValues = {},
+  submitLabel,
 }: ParityFormRendererProps) {
-  const [formData, setFormData] = useState<Record<string, any>>({});
+  const [formData, setFormData] = useState<Record<string, any>>(initialValues || {});
   const [submitting, setSubmitting] = useState(false);
+  const isReadOnly = mode === "view";
+  const submitButtonLabel =
+    submitLabel || (mode === "edit" ? "Save Changes" : "Submit Module");
+
+  useEffect(() => {
+    setFormData(initialValues || {});
+  }, [initialValues]);
 
   const mappedElements = useMemo<FormElementType[]>(() => {
     if (!form) return [];
@@ -111,7 +124,7 @@ export default function ParityFormRenderer({
   // Called by the <form onSubmit> wrapper — not by FormPreview's onSave prop
   const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!onSubmit || submitting || disableSubmit) return;
+    if (isReadOnly || !onSubmit || submitting || disableSubmit) return;
     try {
       setSubmitting(true);
       await onSubmit(formData);
@@ -148,8 +161,10 @@ export default function ParityFormRenderer({
     >
       {/* FormPreview renders all form fields */}
       <fieldset
-        disabled={disableSubmit}
-        className={disableSubmit ? "pointer-events-none opacity-70" : undefined}
+        disabled={disableSubmit || isReadOnly}
+        className={
+          disableSubmit || isReadOnly ? "pointer-events-none opacity-70" : undefined
+        }
       >
         <FormPreview
           elements={elementsWithoutSubmit}
@@ -168,25 +183,32 @@ export default function ParityFormRenderer({
       {/* Always visible at the bottom of the drawer — user never has to scroll
           past the last field to find the button. */}
       <div className="sticky bottom-0 z-10 border-t border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-900">
+        {isReadOnly ? (
+          <div className="rounded-md border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
+            Read-only mode enabled for this submission.
+          </div>
+        ) : null}
         {disableSubmit && (
           <div className="mb-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
             {disableReason || "Submission is currently unavailable for this date."}
           </div>
         )}
-        <button
-          type="submit"
-          disabled={submitting || disableSubmit}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {submitting ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Submitting…
-            </>
-          ) : (
-            "Submit Module"
-          )}
-        </button>
+        {!isReadOnly ? (
+          <button
+            type="submit"
+            disabled={submitting || disableSubmit}
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {mode === "edit" ? "Saving..." : "Submitting..."}
+              </>
+            ) : (
+              submitButtonLabel
+            )}
+          </button>
+        ) : null}
       </div>
     </form>
   );

@@ -12,6 +12,7 @@ import Dashboard from "./pages/Dashboard";
 import Storage from "./pages/Storage";
 import FormModulesDashboard from "./pages/FormModulesDashboard";
 import ModuleSubmissions from "./pages/ModuleSubmissions";
+import ModuleReportSubmissions from "./pages/ModuleReportSubmissions";
 import FormRenderer from "./pages/FormRenderer";
 import Settings from "./pages/Settings";
 import Emails from "./pages/Emails";
@@ -127,6 +128,22 @@ function App() {
               element={
                 <ProtectedRoute>
                   <ModuleSubmissions />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="module-report/:moduleId"
+              element={
+                <ProtectedRoute>
+                  <ModuleReportSubmissions />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="module-report/:moduleId/:tenantId/:nodeId"
+              element={
+                <ProtectedRoute>
+                  <ModuleReportSubmissions />
                 </ProtectedRoute>
               }
             />

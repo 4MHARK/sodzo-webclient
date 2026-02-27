@@ -607,11 +607,15 @@ export default function FormModulesDashboard() {
   const handleViewSubmissions = () => {
     if (!selectedModule) return;
     setDrawerOpen(false);
-    navigate(`/projects/${selectedModule.id}/submissions`);
+    const tenant = user?.tenantId || "tenant";
+    const node = userNodeId || "node";
+    navigate(`/module-report/${selectedModule.id}/${tenant}/${node}`);
   };
 
   const handleViewSubmissionsForModule = (moduleId: string) => {
-    navigate(`/projects/${moduleId}/submissions`);
+    const tenant = user?.tenantId || "tenant";
+    const node = userNodeId || "node";
+    navigate(`/module-report/${moduleId}/${tenant}/${node}`);
   };
 
   if (loading) {
