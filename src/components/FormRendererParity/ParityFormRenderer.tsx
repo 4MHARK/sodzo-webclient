@@ -8,6 +8,8 @@ import { mapApiFormToPreviewElements } from "./formPreviewAdapter";
 interface ParityFormRendererProps {
   form: any | null;
   onSubmit?: (values: Record<string, any>) => Promise<void> | void;
+  disableSubmit?: boolean;
+  disableReason?: string;
 }
 
 const formStyles = {
@@ -77,6 +79,8 @@ const formStyles = {
 export default function ParityFormRenderer({
   form,
   onSubmit,
+  disableSubmit = false,
+  disableReason,
 }: ParityFormRendererProps) {
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -107,7 +111,7 @@ export default function ParityFormRenderer({
   // Called by the <form onSubmit> wrapper — not by FormPreview's onSave prop
   const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!onSubmit || submitting) return;
+    if (!onSubmit || submitting || disableSubmit) return;
     try {
       setSubmitting(true);
       await onSubmit(formData);
@@ -143,25 +147,35 @@ export default function ParityFormRenderer({
       className="flex flex-col gap-0"
     >
       {/* FormPreview renders all form fields */}
-      <FormPreview
-        elements={elementsWithoutSubmit}
-        onSave={() => {
-          /* intentionally empty — submission is handled by the <form> wrapper */
-        }}
-        wizardMode={Boolean(form?.wizardMode)}
-        columnSpans={(form?.columnSpans || {}) as Record<string, 1 | 2 | 3 | 4>}
-        formStyle={selectedStyle}
-        formData={formData}
-        onInputChange={handleInputChange}
-      />
+      <fieldset
+        disabled={disableSubmit}
+        className={disableSubmit ? "pointer-events-none opacity-70" : undefined}
+      >
+        <FormPreview
+          elements={elementsWithoutSubmit}
+          onSave={() => {
+            /* intentionally empty — submission is handled by the <form> wrapper */
+          }}
+          wizardMode={Boolean(form?.wizardMode)}
+          columnSpans={(form?.columnSpans || {}) as Record<string, 1 | 2 | 3 | 4>}
+          formStyle={selectedStyle}
+          formData={formData}
+          onInputChange={handleInputChange}
+        />
+      </fieldset>
 
       {/* ── Sticky submit bar ─────────────────────────────────────────────── */}
       {/* Always visible at the bottom of the drawer — user never has to scroll
           past the last field to find the button. */}
       <div className="sticky bottom-0 z-10 border-t border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-900">
+        {disableSubmit && (
+          <div className="mb-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+            {disableReason || "Submission is currently unavailable for this date."}
+          </div>
+        )}
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || disableSubmit}
           className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {submitting ? (

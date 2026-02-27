@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Search, Filter, Loader2, FileText, CheckCircle2, Activity, CreditCard, Shield } from "lucide-react";
+import { Search, Filter, Loader2, FileText, CheckCircle2, Activity, CreditCard, Shield, Eye } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useDeviceDetection } from "../hooks/useDeviceDetection";
@@ -52,6 +52,20 @@ export default function FormModulesDashboard() {
   const [selectedEventDate, setSelectedEventDate] = useState<string>("");
   const [eventDatesLoading, setEventDatesLoading] = useState(false);
   const [trackingMode, setTrackingMode] = useState<string>("none");
+  const [selectedMonthLocked, setSelectedMonthLocked] = useState(false);
+  const [submitGate, setSubmitGate] = useState<{
+    open: boolean;
+    blocked: boolean;
+    message: string;
+    values: Record<string, any> | null;
+    confirming: boolean;
+  }>({
+    open: false,
+    blocked: false,
+    message: "",
+    values: null,
+    confirming: false,
+  });
 
   // Fetch forms from API
   useEffect(() => {
@@ -107,33 +121,81 @@ export default function FormModulesDashboard() {
   // Get unique categories
   const categories = ["All", ...Array.from(new Set(modules.map(m => m.category).filter(Boolean)))];
 
-  // Fetch per-date schedule for the selected month (daily / weekly modes)
-  const fetchEventDates = async (
+  const fetchComplianceCalendar = async (
     projectId: string,
     nodeId: string,
-    month: string,        // "YYYY-MM"
+    month: string | undefined,
     mode: string
   ) => {
-    if (mode === "none" || !mode) {
-      setAllowedEventDates(undefined);
-      setSelectedEventDate("");
-      return;
-    }
     try {
       setEventDatesLoading(true);
       const res = await api.get("/submissions/allowed-dates", {
-        params: { projectId, nodeId, month },
+        params: {
+          projectId,
+          nodeId,
+          ...(month ? { month } : {}),
+        },
       });
-      const { dates = [], trackingMode: tm } = res.data;
-      setTrackingMode(tm || "none");
-      setAllowedEventDates(dates);
-      // Auto-select the first available date
-      const today = new Date().toISOString().split("T")[0];
-      const firstOpen = dates.find((d: any) => !d.isFull && d.date >= today);
-      setSelectedEventDate(firstOpen?.date ?? dates[0]?.date ?? "");
+
+      const {
+        dates = [],
+        trackingMode: resolvedMode,
+        locked = false,
+        month: effectiveMonth,
+        allowedMonths: responseAllowedMonths,
+        lockedMonths: responseLockedMonths,
+        // backward compatibility if backend still returns legacy field names
+        allowedDates: legacyAllowedMonths,
+        lockedDates: legacyLockedMonths,
+      } = res.data || {};
+
+      const finalMode = resolvedMode || mode || "none";
+      const openMonths = responseAllowedMonths || legacyAllowedMonths || [];
+      const closedMonths = responseLockedMonths || legacyLockedMonths || [];
+      const nextMonth = effectiveMonth || month || selectedMonth;
+
+      setAllowedMonths(openMonths);
+      setLockedMonths(closedMonths);
+      setTrackingMode(finalMode);
+      setSelectedMonthLocked(Boolean(locked));
+      if (nextMonth && nextMonth !== selectedMonth) {
+        setSelectedMonth(nextMonth);
+      }
+
+      if (finalMode === "daily" || finalMode === "weekly") {
+        const nextDates = Array.isArray(dates) ? dates : [];
+        setAllowedEventDates(nextDates);
+
+        const isSelectable = (d: any) =>
+          !d?.isFull &&
+          !d?.locked &&
+          d?.status !== "locked" &&
+          d?.status !== "full";
+
+        const today = new Date().toISOString().split("T")[0];
+        const currentStillSelectable = nextDates.find(
+          (d: any) => d?.date === selectedEventDate && isSelectable(d)
+        );
+        const firstOpenFromToday = nextDates.find(
+          (d: any) => isSelectable(d) && d?.date >= today
+        );
+        const firstOpenAny = nextDates.find((d: any) => isSelectable(d));
+
+        // Never auto-select full/locked dates.
+        setSelectedEventDate(
+          currentStillSelectable?.date ??
+            firstOpenFromToday?.date ??
+            firstOpenAny?.date ??
+            ""
+        );
+      } else {
+        setAllowedEventDates(undefined);
+        setSelectedEventDate("");
+      }
     } catch (err) {
-      console.warn("Event dates fetch failed:", err);
+      console.warn("Unified compliance fetch failed:", err);
       setAllowedEventDates([]);
+      setSelectedMonthLocked(false);
     } finally {
       setEventDatesLoading(false);
     }
@@ -144,7 +206,7 @@ export default function FormModulesDashboard() {
     setSelectedMonth(month);
     if (selectedForm && userNodeId) {
       const mode = selectedForm?.permSettings?.trackingMode ?? "none";
-      fetchEventDates(selectedForm.projectId, userNodeId, month, mode);
+      fetchComplianceCalendar(selectedForm.projectId, userNodeId, month, mode);
     }
   };
 
@@ -161,6 +223,7 @@ export default function FormModulesDashboard() {
       setAllowedEventDates(undefined);
       setSelectedEventDate("");
       setTrackingMode("none");
+      setSelectedMonthLocked(false);
 
       // Fetch form details + compliance window in parallel
       const [formResponse] = await Promise.all([
@@ -174,39 +237,10 @@ export default function FormModulesDashboard() {
       const requireMonth = fetchedForm?.permSettings?.requireMonth === true;
 
       if (isPermForm && requireMonth && userNodeId) {
-        try {
-          const compResponse = await api.get("/submissions/allowed-months", {
-            params: { projectId: module.id, nodeId: userNodeId },
-          });
-          const { allowedDates = [], lockedDates = [] } = compResponse.data;
-          // The backend now always returns a full year from event_calendar
-          // (or a generated fallback). Pass it straight to the selector — no
-          // rolling-window fallback needed in the UI anymore.
-          setAllowedMonths(allowedDates);
-          setLockedMonths(lockedDates);
-          // Auto-select the first unlocked future/current month if the
-          // currently selected month is not in the allowed list.
-          const currentMo = currentMonthValue();
-          if (allowedDates.length > 0 && !allowedDates.includes(currentMo)) {
-            // Pick the nearest future month, otherwise the first available.
-            const future = allowedDates.filter((d: string) => d >= currentMo);
-            setSelectedMonth(future.length > 0 ? future[0] : allowedDates[0]);
-          }
-          if (allowedDates.length === 0) {
-              toast.error("No submission window open for this module — all periods are locked.");
-            }
-        } catch (compErr) {
-          console.warn("Compliance window fetch failed:", compErr);
-          setAllowedMonths(undefined);
-        }
-
-        // Fetch per-date schedule for the initial selected month
         const mode = fetchedForm?.permSettings?.trackingMode ?? "none";
         setTrackingMode(mode);
-        if (mode !== "none") {
-          const initMonth = currentMonthValue();
-          await fetchEventDates(module.id, userNodeId, initMonth, mode);
-        }
+        const initMonth = currentMonthValue();
+        await fetchComplianceCalendar(module.id, userNodeId, initMonth, mode);
       }
     } catch (error: any) {
       console.error("Error loading form:", error);
@@ -225,16 +259,14 @@ export default function FormModulesDashboard() {
     }));
   };
 
-  // Handle form submission
-  const handleFormSubmit = async (values: Record<string, any>) => {
-    if (!selectedModule) return;
-
-    // Block submissions if the user has no assigned node
+  const executeFinalSubmission = async (values: Record<string, any>) => {
+    if (!selectedModule) return { success: false, error: "No module selected" };
     if (!nodeLoading && !userNodeId) {
-      toast.error(
-        "You are not assigned to a node. Please contact your administrator before submitting."
-      );
-      return;
+      return {
+        success: false,
+        error:
+          "You are not assigned to a node. Please contact your administrator before submitting.",
+      };
     }
 
     try {
@@ -349,6 +381,7 @@ export default function FormModulesDashboard() {
       // Determine whether the form is PERM-enabled and requires a reporting month
       const isPermForm = (selectedForm as any)?.permSettings?.enabled === true;
       const requiresMonth = isPermForm && (selectedForm as any)?.permSettings?.requireMonth === true;
+      const mode = (selectedForm as any)?.permSettings?.trackingMode ?? trackingMode ?? "none";
 
       // Build the submission body, omitting optional fields that are undefined
       // so Joi doesn't trip on empty strings.
@@ -377,20 +410,192 @@ export default function FormModulesDashboard() {
         submissionBody.submission_date = selectedEventDate;
       }
 
+      // Last-moment guard: refresh allowed-dates before submit so stale UI state
+      // cannot enqueue a job for a date that is already full/locked.
+      if (
+        requiresMonth &&
+        (mode === "daily" || mode === "weekly") &&
+        resolvedNodeId &&
+        selectedMonth
+      ) {
+        const latest = await api.get("/submissions/allowed-dates", {
+          params: {
+            projectId: selectedModule.id,
+            nodeId: resolvedNodeId,
+            month: selectedMonth,
+          },
+        });
+
+        const latestDates = Array.isArray(latest?.data?.dates)
+          ? latest.data.dates
+          : [];
+        const latestMonthLocked = Boolean(latest?.data?.locked);
+        const latestSelected = latestDates.find(
+          (d: any) => d?.date === selectedEventDate
+        );
+        const latestBlocked =
+          latestMonthLocked ||
+          !latestSelected ||
+          latestSelected.locked ||
+          latestSelected.status === "locked" ||
+          latestSelected.isFull ||
+          latestSelected.status === "full";
+
+        if (latestBlocked) {
+          setSelectedMonthLocked(latestMonthLocked);
+          setAllowedEventDates(latestDates);
+          const firstOpen = latestDates.find(
+            (d: any) =>
+              !d?.locked &&
+              d?.status !== "locked" &&
+              !d?.isFull &&
+              d?.status !== "full"
+          );
+          setSelectedEventDate(firstOpen?.date ?? "");
+          const reason =
+            latestMonthLocked ||
+            latestSelected?.locked ||
+            latestSelected?.status === "locked"
+              ? "Submission period locked"
+              : "Submission quota reached";
+          return { success: false, error: reason };
+        }
+      }
+
       // POST to the unified /submissions endpoint (BullMQ worker → PostgreSQL)
       await api.post("/submissions", submissionBody);
-      
+
+      // Immediately refresh calendar/compliance state after submission so quota/status updates are visible.
+      if (requiresMonth && resolvedNodeId) {
+        await fetchComplianceCalendar(
+          selectedModule.id,
+          resolvedNodeId,
+          selectedMonth,
+          mode
+        );
+      }
+
       toast.success("Module submitted successfully!");
-      setDrawerOpen(false);
-      setFormValues({});
-      setSelectedForm(null);
+      // Close drawer on successful submit so the form flow completes cleanly.
+      handleCloseDrawer();
+      return { success: true };
     } catch (error: any) {
       console.error("Error submitting form:", error);
-      toast.error(error.response?.data?.message || "Failed to submit module");
+      return {
+        success: false,
+        error: error.response?.data?.message || "Failed to submit module",
+      };
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const handleConfirmSubmission = async () => {
+    if (!submitGate.values) return;
+    setSubmitGate((prev) => ({ ...prev, confirming: true }));
+    const result = await executeFinalSubmission(submitGate.values);
+    if (!result.success) {
+      setSubmitGate({
+        open: true,
+        blocked: true,
+        message:
+          result.error ||
+          "Submission was blocked by policy or quota checks.",
+        values: null,
+        confirming: false,
+      });
+      toast.error(result.error || "Failed to submit module");
+      return;
+    }
+    setSubmitGate({
+      open: false,
+      blocked: false,
+      message: "",
+      values: null,
+      confirming: false,
+    });
+  };
+
+  // Handle form submission - opens confirmation gate first
+  const handleFormSubmit = async (values: Record<string, any>) => {
+    const selectedDateData = (allowedEventDates || []).find(
+      (d: any) => d.date === selectedEventDate
+    );
+    const dateBlocked =
+      selectedMonthLocked ||
+      (selectedDateData &&
+        (selectedDateData.locked ||
+          selectedDateData.status === "locked" ||
+          selectedDateData.isFull ||
+          selectedDateData.status === "full"));
+
+    if (dateBlocked) {
+      setSubmitGate({
+        open: true,
+        blocked: true,
+        message:
+          selectedMonthLocked ||
+          selectedDateData?.locked ||
+          selectedDateData?.status === "locked"
+            ? "Submission period locked for the selected date."
+            : "Submission quota reached for the selected date.",
+        values: null,
+        confirming: false,
+      });
+      return;
+    }
+
+    setSubmitGate({
+      open: true,
+      blocked: false,
+      message:
+        trackingMode !== "none" && selectedEventDate
+          ? `Confirm final submission for ${selectedEventDate}. A final policy/quota check will run before submit.`
+          : `Confirm final submission for ${selectedMonth}. A final policy/quota check will run before submit.`,
+      values,
+      confirming: false,
+    });
+  };
+
+  const submissionBlockState = useMemo(() => {
+    if (!selectedForm) return { blocked: false, message: "" };
+    const isPermForm = (selectedForm as any)?.permSettings?.enabled === true;
+    const requiresMonth = isPermForm && (selectedForm as any)?.permSettings?.requireMonth === true;
+    if (!requiresMonth) return { blocked: false, message: "" };
+
+    if (lockedMonths.includes(selectedMonth) || selectedMonthLocked) {
+      return { blocked: true, message: "Submission period locked" };
+    }
+
+    const mode = trackingMode || (selectedForm as any)?.permSettings?.trackingMode || "none";
+    if (mode === "daily" || mode === "weekly") {
+      if (!selectedEventDate) {
+        return { blocked: true, message: "Select an allowed submission date" };
+      }
+      const selectedDateData = (allowedEventDates || []).find(
+        (d: any) => d.date === selectedEventDate
+      );
+      if (!selectedDateData) {
+        return { blocked: true, message: "Selected date is not available" };
+      }
+      if (selectedDateData.locked || selectedDateData.status === "locked") {
+        return { blocked: true, message: "Submission period locked" };
+      }
+      if (selectedDateData.isFull || selectedDateData.status === "full") {
+        return { blocked: true, message: "Submission quota reached" };
+      }
+    }
+
+    return { blocked: false, message: "" };
+  }, [
+    selectedForm,
+    lockedMonths,
+    selectedMonth,
+    selectedMonthLocked,
+    trackingMode,
+    selectedEventDate,
+    allowedEventDates,
+  ]);
 
   // Close drawer
   const handleCloseDrawer = () => {
@@ -403,6 +608,10 @@ export default function FormModulesDashboard() {
     if (!selectedModule) return;
     setDrawerOpen(false);
     navigate(`/projects/${selectedModule.id}/submissions`);
+  };
+
+  const handleViewSubmissionsForModule = (moduleId: string) => {
+    navigate(`/projects/${moduleId}/submissions`);
   };
 
   if (loading) {
@@ -430,6 +639,13 @@ export default function FormModulesDashboard() {
               Access and fill out project modules
             </p>
           </div>
+          <button
+            onClick={() => navigate("/projects/submissions")}
+            className="mt-3 sm:mt-0 inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+          >
+            <Eye className="h-4 w-4" />
+            View Submissions
+          </button>
         </motion.div>
       )}
 
@@ -439,9 +655,18 @@ export default function FormModulesDashboard() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Modules
-          </h1>
+          <div className="flex items-center justify-between gap-2">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              Modules
+            </h1>
+            <button
+              onClick={() => navigate("/projects/submissions")}
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+            >
+              <Eye className="h-3.5 w-3.5" />
+              View Submissions
+            </button>
+          </div>
         </motion.div>
       )}
 
@@ -676,13 +901,23 @@ export default function FormModulesDashboard() {
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}>
           {filteredModules.map((module, index) => (
-            <ModuleCardCompact
-              key={module.id}
-              {...module}
-              onClick={() => handleModuleClick(module)}
-              index={index}
-              variant="compact"
-            />
+            <div key={module.id} className="space-y-2">
+              <ModuleCardCompact
+                {...module}
+                onClick={() => handleModuleClick(module)}
+                index={index}
+                variant="compact"
+              />
+              <button
+                type="button"
+                onClick={() => handleViewSubmissionsForModule(module.id)}
+                className="w-full inline-flex items-center justify-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                title="View submissions"
+              >
+                <Eye className="h-3.5 w-3.5" />
+                View Submissions
+              </button>
+            </div>
           ))}
         </motion.div>
       )}
@@ -707,7 +942,51 @@ export default function FormModulesDashboard() {
         onEventDateChange={setSelectedEventDate}
         eventDatesLoading={eventDatesLoading}
         trackingMode={trackingMode}
+        submissionBlocked={submissionBlockState.blocked}
+        submissionBlockMessage={submissionBlockState.message}
       />
+
+      {submitGate.open && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl dark:bg-gray-800">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              {submitGate.blocked ? "Submission Blocked" : "Confirm Submission"}
+            </h3>
+            <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">
+              {submitGate.message}
+            </p>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setSubmitGate({
+                    open: false,
+                    blocked: false,
+                    message: "",
+                    values: null,
+                    confirming: false,
+                  })
+                }
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+              >
+                {submitGate.blocked ? "Close" : "Cancel"}
+              </button>
+              {!submitGate.blocked && (
+                <button
+                  type="button"
+                  onClick={handleConfirmSubmission}
+                  disabled={submitGate.confirming || isSubmitting}
+                  className="rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {submitGate.confirming || isSubmitting
+                    ? "Submitting..."
+                    : "Confirm & Submit"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

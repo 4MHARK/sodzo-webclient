@@ -28,6 +28,11 @@ export interface AllowedDate {
   remaining: number;
   isFull: boolean;
   isPast: boolean;
+  locked?: boolean;
+  status?: "available" | "partial" | "full" | "locked";
+  quota_total?: number;
+  submitted_count?: number;
+  remaining_count?: number;
 }
 
 interface EventDateSelectorProps {
@@ -55,9 +60,10 @@ function slotLabel(submitted: number, required: number): string {
   return `${submitted}/${required}`;
 }
 
-type TileStatus = "available" | "partial" | "full" | "past";
+type TileStatus = "available" | "partial" | "full" | "locked" | "past";
 
 function tileStatus(d: AllowedDate): TileStatus {
+  if (d.locked || d.status === "locked") return "locked";
   if (d.isFull) return d.isPast ? "past" : "full";
   if (d.submitted > 0) return "partial";
   if (d.isPast) return "past";
@@ -71,6 +77,8 @@ const TILE_STYLES: Record<TileStatus, string> = {
     "border-amber-300 bg-amber-50 dark:border-amber-600 dark:bg-amber-900/20 hover:border-amber-400 cursor-pointer",
   full:
     "border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-900/20 cursor-not-allowed opacity-70",
+  locked:
+    "border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/20 cursor-not-allowed opacity-70",
   past:
     "border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/30 cursor-not-allowed opacity-50",
 };
@@ -145,7 +153,7 @@ export default function EventDateSelector({
         {visibleDates.map((d) => {
           const status   = tileStatus(d);
           const selected = d.date === value;
-          const disabled = status === "full" || status === "past";
+          const disabled = status === "full" || status === "past" || status === "locked";
           const labels   = formatDateLabel(d.date);
 
           return (
@@ -239,6 +247,13 @@ function Label({ trackingMode }: { trackingMode: string }) {
 }
 
 function SlotBadge({ status, submitted, required }: { status: TileStatus; submitted: number; required: number }) {
+  if (status === "locked") {
+    return (
+      <span className="mt-1 flex items-center gap-0.5 rounded-full bg-red-200 dark:bg-red-800/50 px-1.5 py-0.5 text-[9px] font-semibold text-red-700 dark:text-red-300">
+        <Lock className="h-2.5 w-2.5" /> Locked
+      </span>
+    );
+  }
   if (status === "past") {
     return (
       <span className="mt-1 flex items-center gap-0.5 rounded-full bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 text-[9px] font-medium text-gray-500 dark:text-gray-400">
@@ -249,7 +264,7 @@ function SlotBadge({ status, submitted, required }: { status: TileStatus; submit
   if (status === "full") {
     return (
       <span className="mt-1 rounded-full bg-green-200 dark:bg-green-800/50 px-1.5 py-0.5 text-[9px] font-semibold text-green-700 dark:text-green-300">
-        Done
+        Full
       </span>
     );
   }

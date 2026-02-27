@@ -25,7 +25,8 @@ export interface UserNode {
 
 interface UseUserNodeResult {
   node: UserNode | null;
-  nodeId: string | null;   // convenience — the _id to pass to backend
+  nodeId: string | null; // business nodeId (e.g. HLN-000EP)
+  nodeObjectId: string | null; // Mongo _id when needed for legacy flows
   nodes: UserNode[];       // full list in case the caller wants to show a picker
   loading: boolean;
   error: string | null;
@@ -90,12 +91,14 @@ export function useUserNode(): UseUserNodeResult {
     nodes[0] ??
     null;
 
+  const resolvedNodeId = primaryNode?.nodeId ?? null;
   // Mongoose serialises ObjectId as virtual `id`; fall back to `_id` for safety
-  const resolvedId = primaryNode?.id ?? primaryNode?._id ?? null;
+  const resolvedObjectId = primaryNode?.id ?? primaryNode?._id ?? null;
 
   return {
     node: primaryNode,
-    nodeId: resolvedId,
+    nodeId: resolvedNodeId,
+    nodeObjectId: resolvedObjectId,
     nodes,
     loading,
     error,

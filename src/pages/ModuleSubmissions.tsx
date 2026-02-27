@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuth } from "../contexts/AuthContext";
+import { useUserNode } from "../hooks/useUserNode";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -71,6 +72,7 @@ interface SubmissionRecord {
   meta?: Record<string, any>;
   created_at?: string;
   updated_at?: string;
+  is_locked?: boolean;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -346,6 +348,7 @@ export default function ModuleSubmissions() {
   const { projectId = "" } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const { api, user } = useAuth();
+  const { nodeId: userNodeId } = useUserNode();
 
   const [loading, setLoading] = useState(true);
   const [projectName, setProjectName] = useState("Module");
@@ -364,29 +367,61 @@ export default function ModuleSubmissions() {
   // Retry loading
   const [retryingId, setRetryingId] = useState<string | null>(null);
 
+  const waitForJobTerminalStatus = async (
+    jobId: string,
+    opts: { attempts?: number; intervalMs?: number } = {}
+  ) => {
+    const attempts = opts.attempts ?? 25;
+    const intervalMs = opts.intervalMs ?? 1200;
+
+    for (let i = 0; i < attempts; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      // eslint-disable-next-line no-await-in-loop
+      const res = await api.get(`/submissions/activity-log/job/${jobId}`);
+      const logs = res.data?.data || res.data?.results || [];
+      const terminal = logs.find((entry: any) => {
+        const status = String(entry?.status || "").toLowerCase();
+        return status === "success" || status === "failed";
+      });
+      if (terminal) {
+        return terminal;
+      }
+    }
+
+    throw new Error("No terminal job status received in polling window");
+  };
+
   // ── Data loading ─────────────────────────────────────────────────────────
 
   const loadData = useCallback(async () => {
-    if (!projectId) return;
+    if (!userNodeId) {
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
+      let tenantId = user?.tenantId || "";
 
-      // Fetch project form to get name and tenantId
-      const [formRes] = await Promise.allSettled([
-        api.get(`/project-forms/project/${projectId}`),
-      ]);
+      if (projectId) {
+        // Fetch project form to get name and tenantId
+        const [formRes] = await Promise.allSettled([
+          api.get(`/project-forms/project/${projectId}`),
+        ]);
 
-      const formData =
-        formRes.status === "fulfilled" ? formRes.value.data : null;
-      const name =
-        formData?.configuration?.projectName || formData?.projectName || "Module";
-      setProjectName(name);
-
-      const tenantId =
-        formData?.tenantId ||
-        formData?.tenant_id ||
-        user?.tenantId ||
-        "";
+        const formData =
+          formRes.status === "fulfilled" ? formRes.value.data : null;
+        const name =
+          formData?.configuration?.projectName || formData?.projectName || "Module";
+        setProjectName(name);
+        tenantId =
+          formData?.tenantId ||
+          formData?.tenant_id ||
+          user?.tenantId ||
+          "";
+      } else {
+        setProjectName("All Modules");
+      }
 
       if (!tenantId) {
         toast.error("Unable to determine tenant — submissions cannot be loaded.");
@@ -396,8 +431,9 @@ export default function ModuleSubmissions() {
       // Fetch from unified /submissions endpoint (PostgreSQL)
       const params = new URLSearchParams({
         tenant_id: tenantId,
-        project_id: projectId,
+        nodeId: userNodeId,
       });
+      if (projectId) params.set("project_id", projectId);
       const subRes = await api.get(`/submissions?${params.toString()}`);
       const rows: SubmissionRecord[] = subRes.data?.results || subRes.data?.submissions || subRes.data || [];
       setSubmissions(Array.isArray(rows) ? rows : []);
@@ -406,7 +442,7 @@ export default function ModuleSubmissions() {
     } finally {
       setLoading(false);
     }
-  }, [projectId, api, user]);
+  }, [projectId, api, user, userNodeId]);
 
   useEffect(() => {
     loadData();
@@ -422,6 +458,10 @@ export default function ModuleSubmissions() {
   // ── Actions ──────────────────────────────────────────────────────────────
 
   const openEdit = (s: SubmissionRecord) => {
+    if (s.is_locked) {
+      toast.error("Submission period is locked and cannot be edited");
+      return;
+    }
     setEditing(s);
     setEditStatus(s.status || "submitted");
     setEditJson(JSON.stringify(s.data || {}, null, 2));
@@ -433,10 +473,19 @@ export default function ModuleSubmissions() {
     try {
       setSaving(true);
       const parsed = JSON.parse(editJson || "{}");
-      await api.patch(`/submissions/${editing.id}`, {
+      const updateRes = await api.patch(`/submissions/${editing.id}`, {
         payload: parsed,
         status: editStatus,
       });
+      const jobId = updateRes.data?.jobId;
+      if (jobId) {
+        toast.loading("Update queued, waiting for completion…", { id: `job-${jobId}` });
+        const terminal = await waitForJobTerminalStatus(jobId);
+        toast.dismiss(`job-${jobId}`);
+        if (String(terminal?.status || "").toLowerCase() === "failed") {
+          throw new Error(terminal?.message || "Update job failed");
+        }
+      }
       toast.success("Submission updated");
       closeEdit();
       await loadData();
@@ -444,7 +493,9 @@ export default function ModuleSubmissions() {
       if (err instanceof SyntaxError) {
         toast.error("Invalid JSON — please fix before saving");
       } else {
-        toast.error(err?.response?.data?.message || "Failed to update submission");
+        toast.error(
+          err?.response?.data?.message || err?.message || "Failed to update submission"
+        );
       }
     } finally {
       setSaving(false);
@@ -452,13 +503,28 @@ export default function ModuleSubmissions() {
   };
 
   const handleDelete = async (s: SubmissionRecord) => {
+    if (s.is_locked) {
+      toast.error("Submission period is locked and cannot be deleted");
+      return;
+    }
     if (!window.confirm("Permanently delete this submission?")) return;
     try {
-      await api.delete(`/submissions/${s.id}`);
+      const deleteRes = await api.delete(`/submissions/${s.id}`);
+      const jobId = deleteRes.data?.jobId;
+      if (jobId) {
+        toast.loading("Delete queued, waiting for completion…", { id: `job-${jobId}` });
+        const terminal = await waitForJobTerminalStatus(jobId);
+        toast.dismiss(`job-${jobId}`);
+        if (String(terminal?.status || "").toLowerCase() === "failed") {
+          throw new Error(terminal?.message || "Delete job failed");
+        }
+      }
       toast.success("Submission deleted");
       await loadData();
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Failed to delete submission");
+      toast.error(
+        err?.response?.data?.message || err?.message || "Failed to delete submission"
+      );
     }
   };
 
@@ -470,12 +536,19 @@ export default function ModuleSubmissions() {
     try {
       setRetryingId(s.id);
       const res = await api.post(`/submissions/${s.id}/retry`);
-      toast.success(
-        res.data?.message || `Submission re-queued (job ${res.data?.jobId})`
-      );
+      const jobId = res.data?.jobId;
+      if (jobId) {
+        toast.loading("Retry queued, waiting for completion…", { id: `job-${jobId}` });
+        const terminal = await waitForJobTerminalStatus(jobId);
+        toast.dismiss(`job-${jobId}`);
+        if (String(terminal?.status || "").toLowerCase() === "failed") {
+          throw new Error(terminal?.message || "Retry job failed");
+        }
+      }
+      toast.success(res.data?.message || "Submission retried successfully");
       await loadData();
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Retry failed");
+      toast.error(err?.response?.data?.message || err?.message || "Retry failed");
     } finally {
       setRetryingId(null);
     }
@@ -619,8 +692,9 @@ export default function ModuleSubmissions() {
                       </button>
                       <button
                         onClick={() => openEdit(sub)}
-                        title="Edit submission"
-                        className="rounded-md border border-gray-200 p-1.5 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                        title={sub.is_locked ? "Locked submission cannot be edited" : "Edit submission"}
+                        disabled={Boolean(sub.is_locked)}
+                        className="rounded-md border border-gray-200 p-1.5 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <Pencil className="h-4 w-4" />
                       </button>
@@ -640,8 +714,9 @@ export default function ModuleSubmissions() {
                       )}
                       <button
                         onClick={() => handleDelete(sub)}
-                        title="Delete submission"
-                        className="rounded-md border border-red-200 p-1.5 text-red-600 hover:bg-red-50 dark:border-red-900/50 dark:hover:bg-red-900/20"
+                        title={sub.is_locked ? "Locked submission cannot be deleted" : "Delete submission"}
+                        disabled={Boolean(sub.is_locked)}
+                        className="rounded-md border border-red-200 p-1.5 text-red-600 hover:bg-red-50 dark:border-red-900/50 dark:hover:bg-red-900/20 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>

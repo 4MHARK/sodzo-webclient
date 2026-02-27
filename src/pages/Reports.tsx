@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
 import type { User } from "../contexts/AuthContext";
 import { Trophy, Shield, TrendingUp } from "lucide-react";
 import toast from "react-hot-toast";
 import { useDeviceDetection } from "../hooks/useDeviceDetection";
+import { useUserNode } from "../hooks/useUserNode";
 import { motion } from "framer-motion";
 
 interface LeaderBoardUser {
@@ -31,11 +32,56 @@ interface ComplianceRecord {
 export default function Reports() {
   const { api, logout, user } = useAuth();
   const { isMobile } = useDeviceDetection();
+  const { nodeId: userNodeId } = useUserNode();
   const [activeTab, setActiveTab] = useState<"leaderboard" | "compliance">(
     "leaderboard"
   );
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
 
   const userId = user?.id;
+  const isOwner = Boolean(user?.isOwner || user?.isSuper);
+
+  const { data: modules = [] } = useQuery({
+    queryKey: ["report-modules"],
+    queryFn: async () => {
+      const res = await api.get("/project-forms");
+      const results = res.data?.results || [];
+      return results.map((module: any) => ({
+        projectId: module.projectId,
+        projectName:
+          module.configuration?.projectName ||
+          module.projectName ||
+          module.projectId,
+      }));
+    },
+    enabled: activeTab === "compliance",
+  });
+
+  const {
+    data: moduleTable,
+    isLoading: moduleTableLoading,
+    error: moduleTableError,
+  } = useQuery({
+    queryKey: ["module-table", selectedProjectId, userNodeId, isOwner],
+    queryFn: async () => {
+      if (!selectedProjectId) return null;
+      const params: Record<string, string> = {
+        project_id: selectedProjectId,
+      };
+      if (!isOwner && userNodeId) {
+        params.node_id = userNodeId;
+      }
+      const res = await api.get("/submission-reports/module-table", { params });
+      return res.data;
+    },
+    enabled: activeTab === "compliance" && !!selectedProjectId,
+  });
+
+  useEffect(() => {
+    if (!selectedProjectId && modules.length > 0) {
+      setSelectedProjectId(modules[0].projectId);
+    }
+  }, [modules, selectedProjectId]);
 
   // Fetch leaderboard data using React Query
   const {
@@ -376,17 +422,80 @@ export default function Reports() {
                   </div>
                 )}
 
-                {compliance.length === 0 ? (
+                <div className="mb-4 space-y-3">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+                    Select Module
+                  </label>
+                  <select
+                    value={selectedProjectId}
+                    onChange={(e) => setSelectedProjectId(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800"
+                  >
+                    <option value="">Select module</option>
+                    {modules.map((module: any) => (
+                      <option key={module.projectId} value={module.projectId}>
+                        {module.projectName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {moduleTableError ? (
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                    {(moduleTableError as any)?.response?.data?.message ||
+                      "Failed to load module report table"}
+                  </div>
+                ) : moduleTableLoading ? (
+                  <div className="text-center py-8 text-sm text-gray-500">
+                    Loading module report table...
+                  </div>
+                ) : moduleTable?.rows?.length ? (
+                  <div className="overflow-x-auto rounded-lg border border-gray-200">
+                    <table className="min-w-full text-xs">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          {(moduleTable.columns || []).map((column: any) => (
+                            <th
+                              key={column.key}
+                              className="whitespace-nowrap border-b px-3 py-2 text-left font-semibold text-gray-700"
+                            >
+                              {column.label}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {moduleTable.rows.map((row: any, idx: number) => (
+                          <tr key={`${row.submission_id || idx}`} className="border-b">
+                            {(moduleTable.columns || []).map((column: any) => (
+                              <td
+                                key={`${row.submission_id || idx}-${column.key}`}
+                                className="whitespace-nowrap px-3 py-2 text-gray-700"
+                              >
+                                {row[column.key] === null || row[column.key] === undefined
+                                  ? "—"
+                                  : String(row[column.key])}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
                   <div className="text-center py-8 mobile:py-8 md:py-12">
                     <Shield className="w-12 h-12 mobile:w-12 mobile:h-12 md:w-16 md:h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
                     <p className="text-sm mobile:text-sm md:text-base text-gray-500 dark:text-gray-400">
-                      No compliance data available
+                      No module report data available
                     </p>
                     <p className="text-xs mobile:text-xs md:text-sm text-gray-400 dark:text-gray-500 mt-2">
-                      Compliance records will appear here when data is available
+                      Submit module data to populate report rows
                     </p>
                   </div>
-                ) : isMobile ? (
+                )}
+
+                {/* legacy compliance cards/table retained below */}
+                {compliance.length > 0 && isMobile ? (
                   /* Mobile Card View */
                   <div className="space-y-3">
                     {compliance.map((record, index) => (

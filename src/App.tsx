@@ -115,6 +115,14 @@ function App() {
               }
             />
             <Route
+              path="projects/submissions"
+              element={
+                <ProtectedRoute>
+                  <ModuleSubmissions />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="projects/:projectId/submissions"
               element={
                 <ProtectedRoute>

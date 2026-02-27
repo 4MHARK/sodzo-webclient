@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Loader2, ChevronRight } from "lucide-react";
+import { X, Loader2, ChevronRight, CalendarDays } from "lucide-react";
 import { useDeviceDetection } from "../../hooks/useDeviceDetection";
 import ParityFormRenderer from "../FormRendererParity/ParityFormRenderer";
 import MonthYearSelector from "./MonthYearSelector";
-import EventDateSelector, { type AllowedDate } from "./EventDateSelector";
+import { type AllowedDate } from "./EventDateSelector";
+import ComplianceCalendarModal from "./ComplianceCalendarModal";
 
 interface FormDrawerProps {
   isOpen: boolean;
@@ -42,6 +44,8 @@ interface FormDrawerProps {
   eventDatesLoading?: boolean;
   /** "daily" | "weekly" | "none" — from the calendar */
   trackingMode?: string;
+  submissionBlocked?: boolean;
+  submissionBlockMessage?: string;
 }
 
 export default function FormDrawer({
@@ -63,8 +67,11 @@ export default function FormDrawer({
   onEventDateChange,
   eventDatesLoading = false,
   trackingMode = "none",
+  submissionBlocked = false,
+  submissionBlockMessage,
 }: FormDrawerProps) {
   const { isMobile } = useDeviceDetection();
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   const requiresMonth =
     form?.permSettings?.enabled && form?.permSettings?.requireMonth;
@@ -83,15 +90,30 @@ export default function FormDrawer({
         lockedDates={lockedMonths}
       />
 
-      {/* Step 2 — Specific date (daily / weekly modes only) */}
+      {/* Step 2 — Compliance calendar modal trigger (daily / weekly modes only) */}
       {requiresEventDate && (
-        <EventDateSelector
-          dates={allowedDates ?? []}
-          value={selectedEventDate}
-          onChange={onEventDateChange ?? (() => {})}
-          trackingMode={trackingMode as "daily" | "weekly"}
-          loading={eventDatesLoading}
-        />
+        <div className="space-y-2">
+          <div className="flex items-center justify-between rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs dark:border-blue-800 dark:bg-blue-950/20">
+            <div className="text-blue-800 dark:text-blue-300">
+              {selectedEventDate ? (
+                <>
+                  Selected date: <span className="font-semibold">{selectedEventDate}</span>
+                </>
+              ) : (
+                "No date selected yet"
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setCalendarOpen(true)}
+              disabled={isSubmitting}
+              className="inline-flex items-center gap-1 rounded-md border border-blue-300 bg-white px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+            >
+              <CalendarDays className="h-3.5 w-3.5" />
+              Open Calendar
+            </button>
+          </div>
+        </div>
       )}
     </div>
   ) : null;
@@ -157,7 +179,12 @@ export default function FormDrawer({
                     <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
                   </div>
                 ) : form ? (
-                  <ParityFormRenderer form={form} onSubmit={onSubmit} />
+                  <ParityFormRenderer
+                    form={form}
+                    onSubmit={onSubmit}
+                    disableSubmit={submissionBlocked}
+                    disableReason={submissionBlockMessage}
+                  />
                 ) : (
                   <div className="text-center py-20 text-gray-500 dark:text-gray-400">
                     No form selected
@@ -167,6 +194,21 @@ export default function FormDrawer({
 
               {/* Footer - Submit button is now handled by ParityFormRenderer */}
             </motion.div>
+
+            {requiresEventDate && selectedMonth && onMonthChange && (
+              <ComplianceCalendarModal
+                isOpen={calendarOpen}
+                onClose={() => setCalendarOpen(false)}
+                selectedMonth={selectedMonth}
+                onMonthChange={onMonthChange}
+                allowedMonths={allowedMonths}
+                lockedMonths={lockedMonths}
+                dates={allowedDates ?? []}
+                selectedDate={selectedEventDate}
+                onDateSelect={onEventDateChange ?? (() => {})}
+                loading={eventDatesLoading}
+              />
+            )}
           </>
         )}
       </AnimatePresence>
@@ -238,7 +280,12 @@ export default function FormDrawer({
                     <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
                   </div>
                 ) : form ? (
-                  <ParityFormRenderer form={form} onSubmit={onSubmit} />
+                  <ParityFormRenderer
+                    form={form}
+                    onSubmit={onSubmit}
+                    disableSubmit={submissionBlocked}
+                    disableReason={submissionBlockMessage}
+                  />
                 ) : (
                   <div className="text-center py-20 text-gray-500 dark:text-gray-400">
                     No form selected
@@ -249,6 +296,21 @@ export default function FormDrawer({
               {/* Footer is now handled by ParityFormRenderer */}
             </div>
           </motion.div>
+
+          {requiresEventDate && selectedMonth && onMonthChange && (
+            <ComplianceCalendarModal
+              isOpen={calendarOpen}
+              onClose={() => setCalendarOpen(false)}
+              selectedMonth={selectedMonth}
+              onMonthChange={onMonthChange}
+              allowedMonths={allowedMonths}
+              lockedMonths={lockedMonths}
+              dates={allowedDates ?? []}
+              selectedDate={selectedEventDate}
+              onDateSelect={onEventDateChange ?? (() => {})}
+              loading={eventDatesLoading}
+            />
+          )}
         </>
       )}
     </AnimatePresence>
