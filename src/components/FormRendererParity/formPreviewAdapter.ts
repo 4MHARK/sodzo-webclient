@@ -1,4 +1,4 @@
-import type { FormElementType } from "@haloform/types/form-builder";
+import type { FormElementType } from "./types";
 
 const mapElementType = (rawType: string): FormElementType["type"] => {
   const normalized = String(rawType || "").toLowerCase();

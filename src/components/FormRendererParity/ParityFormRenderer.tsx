@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
-import FormPreview from "@haloform/FormBuilder/FormPreview";
-import type { FormElementType } from "@haloform/types/form-builder";
+import FormPreview from "./LocalFormPreview";
+import type { FormElementType } from "./types";
 import { mapApiFormToPreviewElements } from "./formPreviewAdapter";
 
 interface ParityFormRendererProps {
