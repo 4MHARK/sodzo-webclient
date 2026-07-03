@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Heart,
+  Users
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { mockUser } from "../../data/mockData";
@@ -28,7 +29,9 @@ const navigation = [
   { name: "Givings", href: "/givings", icon: Heart },
   { name: "Reports", href: "/reports", icon: BarChart3 },
   { name: "Store", href: "/store", icon: ShoppingBag },
+  { name: "User", href: "/user", icon: Users },
   { name: "Admin", href: "/admin", icon: ShieldCheck, ownerOnly: true },
+
 ];
 
 // const futureFeatures = [
