@@ -23,6 +23,7 @@ import Calendar from "./pages/Calendar";
 import Reports from "./pages/Reports";
 import ECommerce from "./pages/ECommerce";
 import Team from "./pages/Team";
+import User from "./pages/User";
 import Givings from "./pages/Givings";
 import PaymentLink from "./pages/Givings/PaymentLink";
 import QRCode from "./pages/Givings/QRCode";
@@ -216,6 +217,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Team />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="user"
+              element={
+                <ProtectedRoute>
+                  <User />
                 </ProtectedRoute>
               }
             />
